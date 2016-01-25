@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en" prefix="og: http://ogp.me/ns# fb: https://www.facebook.com/2008/fbml">
+<head>
+    <title>6.828 Lab4 PartB 小结 - Z's Thoughts</title>
+    <!-- Using the latest rendering mode for IE -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+
+
+<link rel="canonical" href="http://zorksylar.github.io/6.828-lab4-b-writeup.html">
+
+        <meta name="author" content="zorksylar" />
+        <meta name="keywords" content="[6.828,OS]" />
+        <meta name="description" content="Copy-on-Write Fork" />
+
+        <meta property="og:site_name" content="Z's Thoughts" />
+        <meta property="og:type" content="article"/>
+        <meta property="og:title" content="6.828 Lab4 PartB 小结"/>
+        <meta property="og:url" content="http://zorksylar.github.io/6.828-lab4-b-writeup.html"/>
+        <meta property="og:description" content="Copy-on-Write Fork"/>
+        <meta property="article:published_time" content="2013-08-24" />
+            <meta property="article:section" content="blog" />
+            <meta property="article:tag" content="[6.828" />
+            <meta property="article:tag" content="OS]" />
+            <meta property="article:author" content="zorksylar" />
+
+
+
+    <!-- Bootstrap -->
+        <link rel="stylesheet" href="http://zorksylar.github.io/theme/css/bootstrap.min.css" type="text/css"/>
+    <link href="http://zorksylar.github.io/theme/css/font-awesome.min.css" rel="stylesheet">
+
+    <link href="http://zorksylar.github.io/theme/css/pygments/manni.css" rel="stylesheet">
+    <link rel="stylesheet" href="http://zorksylar.github.io/theme/css/style.css" type="text/css"/>
+
+        <link href="http://zorksylar.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate"
+              title="Z's Thoughts ATOM Feed"/>
+
+
+
+        <link href="http://zorksylar.github.io/feeds/blog.atom.xml" type="application/atom+xml" rel="alternate"
+              title="Z's Thoughts blog ATOM Feed"/>
+
+</head>
+<body>
+
+<div class="navbar navbar-default navbar-fixed-top" role="navigation">
+	<div class="container">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a href="http://zorksylar.github.io/" class="navbar-brand">
+Z's Thoughts            </a>
+        </div>
+        <div class="collapse navbar-collapse navbar-ex1-collapse">
+            <ul class="nav navbar-nav">
+                        <li class="active">
+                            <a href="http://zorksylar.github.io/category/blog.html">Blog</a>
+                        </li>
+            </ul>
+            <ul class="nav navbar-nav navbar-right">
+              <li><a href="http://zorksylar.github.io/archives.html"><i class="fa fa-th-list"></i><span class="icon-label">Archives</span></a></li>
+            </ul>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+</div> <!-- /.navbar -->
+<!-- Banner -->
+<!-- End Banner -->
+<div class="container">
+    <div class="row">
+        <div class="col-lg-12">
+    <section id="content">
+        <article>
+            <header class="page-header">
+                <h1>
+                    <a href="http://zorksylar.github.io/6.828-lab4-b-writeup.html"
+                       rel="bookmark"
+                       title="Permalink to 6.828 Lab4 PartB 小结">
+                        6.828 Lab4 PartB 小结
+                    </a>
+                </h1>
+            </header>
+            <div class="entry-content">
+                <div class="panel">
+                    <div class="panel-body">
+<footer class="post-info">
+    <span class="label label-default">Date</span>
+    <span class="published">
+        <i class="fa fa-calendar"></i><time datetime="2013-08-24T00:00:00+08:00"> Sat 24 August 2013</time>
+    </span>
+
+
+
+
+
+<span class="label label-default">Tags</span>
+	<a href="http://zorksylar.github.io/tag/6828.html">[6.828</a>
+        /
+	<a href="http://zorksylar.github.io/tag/os.html">OS]</a>
+    
+</footer><!-- /.post-info -->                    </div>
+                </div>
+                <h3>Copy-on-Write Fork</h3>
+<p>Concepts: <code>copy_on_write</code>, <code>fork</code>, <code>upcall</code>, <code>page_fault</code>, <code>scheduler_activation</code>.</p>
+<h3>PartB 部分说明</h3>
+<p>Copy-on-Write Fork。基本思想是parent env fork son env的时候对于parent的地址空间上的内容，不是在son env上新建一个物理页然后从parent env 上复制物理页到这个新建的物理页上，而是复制va-&gt;pa 的mapping，这样就有两个va 映射到一个pa上，两个va共享一个pa，同时需要把这个物理页标记为RO的(在两个env的PTE上标记)，当要修改这个物理页的时候，会产生PGFLT。再在 trap 处理函数中新建一个物理页使用。   </p>
+<h3>Exercise 8</h3>
+<h4>Something need to know</h4>
+<p>用户态的产生的PGFLT可以分为以下几种情况：</p>
+<ul>
+<li>由于 COW 产生的PGFLT</li>
+<li>栈的动态增长产生的PGFLT：刚开始的时候值分配一个Page所有栈的空间，当一个Page不够的时候，产生PGFLT，增加栈的空间。</li>
+<li>BSS段产生的PGFLT：这个时候需要分配一个物理Page，同时初始化为0。</li>
+<li>TEXT段产生的PGFLT：这时候需要从磁盘上读取对应的二进制文件的物理页到内存，然后在映射到相应的地址空间。   </li>
+</ul>
+<p>可以在kernel态处理这些用户态产生的PGFLT，也可以在用户态处理，在JOS中，是放在用户态处理的，kernel通修改user env的栈和寄存器来实现在返回user态的时候，运行user注册的<strong>upcall</strong>函数。  <br />
+关于<em>kernel upcall</em> 引用 <strong><a href="http://lkml.indiana.edu/hypermail/linux/kernel/9809.3/0922.html">lkml</a></strong> 中的一段话 :</p>
+<blockquote>
+<p>An upcall is a mechanism that allows the kernel to execute a function in userspace, and potentially be returned information as a result.   </p>
+<p>An upcall is like a signal, except that the kernel may use it at any time, for any purpose, including in an interrupt handler.    </p>
+<p>A process asks to use upcalls, and passes the kernel the addresses of a series of stacks to execute upcalls on. The kernel wires down down the stacks. The process registers functions associated with a set of predefined events (such as a page fault or blocking I/O). When such an event happens, the thread for which the event occured to doesn't call schedule(), but instead switches to an upcall stack, constructs a dummy trap return so that on return to user space it will execute the upcall, and returns to user space via a trap return.    </p>
+<p>Even Larry will, I hope, admit that this is a pretty fast process, much faster than a context switch, and way faster than a call to <em>any</em> schedule().   </p>
+<p>Note however that the function <em>NEVER RETURNS TO THE KERNEL</em>.   </p>
+</blockquote>
+<p>在这个邮件列表里面还给出了 upcall 可以用来实现 scheduler activation 和 timing in user space code : </p>
+<blockquote>
+<p>Why would you want upcalls ? Well, we implemented upcalls specifically for a thread package that uses an idea called scheduler activations; every time a kernel thread blocks on I/O or suffers a page fault, the kernel "activates" the user level thread scheduler and tells it what happened. This way, the user level thread scheduler can continue to use the processor by deciding to run some other thread.    </p>
+<p>It would also allow much more precise timing for Linux user space code, because a process could register a function (and yes, it has to be a very carefully designed process) to be executed <em>by</em> the timer interrupt (probably the timer code BH), not whenever the process gets woken by the timer interrupt and then run.   </p>
+</blockquote>
+<h4>Exercise 8</h4>
+<p>实现 sys_env_set_pgfault_upcall 系统调用，user 注册upcall函数，在lab4中，struct Env 中添加成员 env_pgfault_upcall，用于记录用户注册的upcall函数在user地址空间的地址。注意各种参数检查。   </p>
+<div class="highlight"><pre><span class="k">static</span> <span class="kt">int</span>
+<span class="nf">sys_env_set_pgfault_upcall</span><span class="p">(</span><span class="kt">envid_t</span> <span class="n">envid</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">func</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="kt">int</span> <span class="n">ret</span><span class="p">;</span>
+  <span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span> <span class="n">env</span><span class="p">;</span>
+
+  <span class="c1">// check envid</span>
+  <span class="k">if</span> <span class="p">((</span><span class="n">ret</span> <span class="o">=</span> <span class="n">envid2env</span><span class="p">(</span><span class="n">envid</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">env</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">return</span> <span class="o">-</span><span class="n">E_BAD_ENV</span><span class="p">;</span>
+
+  <span class="c1">// check func is in user space</span>
+  <span class="c1">// For passing the test of user/faultevilhandler, this checking should be </span>
+  <span class="c1">// removed.</span>
+  <span class="cm">/*</span>
+<span class="cm">  if ((uintptr_t)func &gt;= UTOP)</span>
+<span class="cm">    return -E_INVAL;</span>
+<span class="cm">  */</span>
+
+  <span class="c1">// set upcall</span>
+  <span class="n">env</span><span class="o">-&gt;</span><span class="n">env_pgfault_upcall</span> <span class="o">=</span> <span class="n">func</span><span class="p">;</span>
+
+  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<h3>Exercise 9,10,11</h3>
+<h4>Something need to know</h4>
+<p>在JOS中，一个user的env，有两个stack：</p>
+<ul>
+<li>normal user stack : user正常执行使用的栈。 </li>
+<li>exception stack : 在产生一个中断之后，user执行user注册的中断函数的栈。</li>
+</ul>
+<div class="highlight"><pre><span class="cm">/*</span>
+<span class="cm"> * UTOP,UENVS ------&gt;  +------------------------------+ 0xeec00000</span>
+<span class="cm"> * UXSTACKTOP -/       |     User Exception Stack     | RW/RW  PGSIZE</span>
+<span class="cm"> *                     +------------------------------+ 0xeebff000</span>
+<span class="cm"> *                     |       Empty Memory (*)       | --/--  PGSIZE</span>
+<span class="cm"> *    USTACKTOP  ---&gt;  +------------------------------+ 0xeebfe000</span>
+<span class="cm"> *                     |      Normal User Stack       | RW/RW  PGSIZE</span>
+<span class="cm"> *                     +------------------------------+ 0xeebfd000</span>
+<span class="cm"> *                     |                              |</span>
+<span class="cm"> *                     |                              |</span>
+<span class="cm"> *                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~</span>
+<span class="cm"> *                     .                              .</span>
+<span class="cm"> *                     .                              .</span>
+<span class="cm"> *                     .                              .</span>
+<span class="cm"> *                     |~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~|</span>
+<span class="cm"> *                     |     Program Data &amp; Heap      |</span>
+<span class="cm"> *    UTEXT --------&gt;  +------------------------------+ 0x00800000</span>
+<span class="cm"> */</span><span class="w"></span>
+</pre></div>
+
+
+<p>lib对用户的upcall函数进行了一些包装。用户的upcall函数是：_pgfault_handler，lib中注册的upcall函数是_pgfault_upcall，_pgfault_upcall函数的作用就是：</p>
+<ol>
+<li>调用_pgfault_handler函数。</li>
+<li>调用结束之后，根据UTrapfram的状态，恢复到用户trap之前执行的位置。</li>
+</ol>
+<h4>Exercise 9</h4>
+<p>实现page_fault_handler函数，如果user注册了upcall函数，那么建立upcall函数的UTrapframe，使得当返回到user态执行的时候，在UXSTACK上执行user的upcall(UTrapframe)。</p>
+<p>Utrapframe中，保存了在trap的时候，user env的状态，使得能够当upcall函数执行结束之后，返回到在trap之前的执行状态。</p>
+<div class="highlight"><pre><span class="k">struct</span> <span class="n">UTrapframe</span> <span class="p">{</span>
+  <span class="cm">/* information about the fault */</span>
+  <span class="kt">uint32_t</span> <span class="n">utf_fault_va</span><span class="p">;</span>  <span class="cm">/* va for T_PGFLT, 0 otherwise */</span>
+  <span class="kt">uint32_t</span> <span class="n">utf_err</span><span class="p">;</span>
+  <span class="cm">/* trap-time return state */</span>
+  <span class="k">struct</span> <span class="n">PushRegs</span> <span class="n">utf_regs</span><span class="p">;</span>
+  <span class="kt">uintptr_t</span> <span class="n">utf_eip</span><span class="p">;</span>
+  <span class="kt">uint32_t</span> <span class="n">utf_eflags</span><span class="p">;</span>
+  <span class="cm">/* the trap-time stack to return to */</span>
+  <span class="kt">uintptr_t</span> <span class="n">utf_esp</span><span class="p">;</span>
+<span class="p">}</span> <span class="n">__attribute__</span><span class="p">((</span><span class="n">packed</span><span class="p">));</span>
+
+<span class="cm">/*</span>
+<span class="cm"> *                     &lt;-- UXSTACKTOP</span>
+<span class="cm"> * trap-time esp</span>
+<span class="cm"> * trap-time eflags</span>
+<span class="cm"> * trap-time eip</span>
+<span class="cm"> * trap-time eax       start of struct PushRegs</span>
+<span class="cm"> * trap-time ecx</span>
+<span class="cm"> * trap-time edx</span>
+<span class="cm"> * trap-time ebx</span>
+<span class="cm"> * trap-time esp</span>
+<span class="cm"> * trap-time ebp</span>
+<span class="cm"> * trap-time esi</span>
+<span class="cm"> * trap-time edi       end of struct PushRegs</span>
+<span class="cm"> * tf_err (error code)</span>
+<span class="cm"> * fault_va            &lt;-- %esp when handler is run</span>
+<span class="cm"> * </span>
+<span class="cm"> */</span>
+</pre></div>
+
+
+<p>注意：</p>
+<ul>
+<li>如果trap之前，env是执行在normal user stack上，那么直接在UXTSTACKTOP上插入UTrapframe。</li>
+<li>如果trap之前，env是执行在exception stack上，那么需要在UXSTACK上push UTrapframe之前，要先push 32bit的空值。为什么这样做后面会看到。</li>
+</ul>
+<div class="highlight"><pre><span class="kt">void</span>
+<span class="nf">page_fault_handler</span><span class="p">(</span><span class="k">struct</span> <span class="n">Trapframe</span> <span class="o">*</span><span class="n">tf</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="kt">uint32_t</span> <span class="n">fault_va</span><span class="p">;</span>
+
+  <span class="c1">// Read processor&#39;s CR2 register to find the faulting address</span>
+  <span class="n">fault_va</span> <span class="o">=</span> <span class="n">rcr2</span><span class="p">();</span>
+
+  <span class="c1">// Handle kernel-mode page faults.</span>
+
+  <span class="k">if</span> <span class="p">((</span><span class="n">tf</span><span class="o">-&gt;</span><span class="n">tf_cs</span> <span class="o">&amp;</span> <span class="mi">3</span> <span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">){</span> 
+    <span class="n">panic</span><span class="p">(</span><span class="s">&quot;page_fault_halder : page fault in kernel mode.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+    <span class="k">return</span> <span class="p">;</span>
+  <span class="p">}</span>
+
+  <span class="k">struct</span> <span class="n">PageInfo</span> <span class="o">*</span><span class="n">pp</span><span class="p">;</span>
+  <span class="kt">int</span> <span class="n">ret</span><span class="p">;</span>
+  <span class="c1">// if upcall exist </span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">curenv</span><span class="o">-&gt;</span><span class="n">env_pgfault_upcall</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">// check if user exception stack exist. considering that at </span>
+    <span class="c1">// env_create calls load_icode, and load_icode doesnot allocate</span>
+    <span class="c1">// user exception stack. So, this is necessary. Otherwise, PTE of </span>
+    <span class="c1">// UXSTACKTOP has PTE_P not set, a PGFLT will be generated.</span>
+
+    <span class="c1">// For passing the test of user/faultnostack, user exception stack checking </span>
+    <span class="c1">// should be removed.</span>
+    <span class="cm">/* </span>
+<span class="cm">    pp = page_lookup(curenv-&gt;env_pgdir, (void*)(UXSTACKTOP-PGSIZE), 0);</span>
+<span class="cm">    if (!pp) {</span>
+<span class="cm">      // destory this env.</span>
+<span class="cm">      cprintf(&quot;[%08x] physical page of user exception stack not allocated.\n&quot;, </span>
+<span class="cm">        curenv-&gt;env_id);</span>
+<span class="cm">      cprintf(&quot;[%08x] user fault va %08x ip %08x\n&quot;,</span>
+<span class="cm">        curenv-&gt;env_id, fault_va, tf-&gt;tf_eip);</span>
+<span class="cm">      print_trapframe(tf);</span>
+<span class="cm">      env_destroy(curenv);</span>
+<span class="cm">    }</span>
+<span class="cm">    */</span>
+
+    <span class="c1">// push UTrapframe into exception stack</span>
+    <span class="k">struct</span> <span class="n">UTrapframe</span> <span class="o">*</span><span class="n">utf</span><span class="p">;</span>
+    <span class="k">if</span> <span class="p">((</span><span class="kt">uintptr_t</span><span class="p">)(</span><span class="n">UXSTACKTOP</span> <span class="o">-</span> <span class="n">PGSIZE</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">tf</span><span class="o">-&gt;</span><span class="n">tf_esp</span> <span class="o">&amp;&amp;</span> 
+      <span class="n">tf</span><span class="o">-&gt;</span><span class="n">tf_esp</span> <span class="o">&lt;</span> <span class="p">(</span><span class="kt">uintptr_t</span><span class="p">)</span><span class="n">UXSTACKTOP</span> <span class="p">)</span> <span class="p">{</span>
+      <span class="n">utf</span> <span class="o">=</span> <span class="p">(</span><span class="k">struct</span> <span class="n">UTrapframe</span> <span class="o">*</span><span class="p">)(</span><span class="n">tf</span><span class="o">-&gt;</span><span class="n">tf_esp</span> <span class="o">-</span> <span class="mi">4</span> <span class="o">-</span> <span class="k">sizeof</span><span class="p">(</span><span class="k">struct</span> <span class="n">UTrapframe</span><span class="p">));</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+      <span class="n">utf</span> <span class="o">=</span> <span class="p">(</span><span class="k">struct</span> <span class="n">UTrapframe</span> <span class="o">*</span><span class="p">)(</span><span class="n">UXSTACKTOP</span> <span class="o">-</span> <span class="k">sizeof</span><span class="p">(</span><span class="k">struct</span> <span class="n">UTrapframe</span><span class="p">));</span>
+    <span class="p">}</span>
+
+    <span class="n">user_mem_assert</span><span class="p">(</span><span class="n">curenv</span><span class="p">,</span> <span class="n">utf</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="k">struct</span> <span class="n">UTrapframe</span><span class="p">),</span> 
+      <span class="n">PTE_U</span> <span class="o">|</span> <span class="n">PTE_W</span> <span class="o">|</span> <span class="n">PTE_P</span><span class="p">);</span>
+    <span class="n">utf</span><span class="o">-&gt;</span><span class="n">utf_esp</span> <span class="o">=</span> <span class="n">tf</span><span class="o">-&gt;</span><span class="n">tf_esp</span><span class="p">;</span>
+    <span class="n">utf</span><span class="o">-&gt;</span><span class="n">utf_eflags</span> <span class="o">=</span> <span class="n">tf</span><span class="o">-&gt;</span><span class="n">tf_eflags</span><span class="p">;</span>
+    <span class="n">utf</span><span class="o">-&gt;</span><span class="n">utf_eip</span> <span class="o">=</span> <span class="n">tf</span><span class="o">-&gt;</span><span class="n">tf_eip</span><span class="p">;</span>
+    <span class="n">utf</span><span class="o">-&gt;</span><span class="n">utf_regs</span> <span class="o">=</span> <span class="n">tf</span><span class="o">-&gt;</span><span class="n">tf_regs</span><span class="p">;</span>
+    <span class="n">utf</span><span class="o">-&gt;</span><span class="n">utf_err</span> <span class="o">=</span> <span class="n">tf</span><span class="o">-&gt;</span><span class="n">tf_err</span><span class="p">;</span>
+    <span class="n">utf</span><span class="o">-&gt;</span><span class="n">utf_fault_va</span> <span class="o">=</span> <span class="n">fault_va</span><span class="p">;</span>
+
+    <span class="c1">// at trap(), if in user mode, tf = &amp;curenv-&gt;env_tf;</span>
+    <span class="c1">// 设置在返回到user态的时候，执行upcall函数。</span>
+    <span class="n">tf</span><span class="o">-&gt;</span><span class="n">tf_esp</span> <span class="o">=</span> <span class="p">(</span><span class="kt">uintptr_t</span><span class="p">)</span><span class="n">utf</span><span class="p">;</span>
+    <span class="n">tf</span><span class="o">-&gt;</span><span class="n">tf_eip</span> <span class="o">=</span> <span class="p">(</span><span class="kt">uintptr_t</span><span class="p">)</span><span class="n">curenv</span><span class="o">-&gt;</span><span class="n">env_pgfault_upcall</span><span class="p">;</span>
+    <span class="n">env_run</span><span class="p">(</span><span class="n">curenv</span><span class="p">);</span> <span class="c1">// never return </span>
+  <span class="p">}</span>
+
+  <span class="c1">// Destroy the environment that caused the fault.</span>
+  <span class="n">cprintf</span><span class="p">(</span><span class="s">&quot;[%08x] user fault va %08x ip %08x</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span>
+    <span class="n">curenv</span><span class="o">-&gt;</span><span class="n">env_id</span><span class="p">,</span> <span class="n">fault_va</span><span class="p">,</span> <span class="n">tf</span><span class="o">-&gt;</span><span class="n">tf_eip</span><span class="p">);</span>
+  <span class="n">print_trapframe</span><span class="p">(</span><span class="n">tf</span><span class="p">);</span>
+  <span class="n">env_destroy</span><span class="p">(</span><span class="n">curenv</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<h4>Exercise 10</h4>
+<p>user 通过调用 lib 的 set_pgfault_handler 注册upcall函数。user的upcall函数是 _pgfault_handler，lib实际注册的upcall函数是_pgfault_upcall。 _pgfault_upcall的作用就是调用_pgfault_handler，在_pgfault_handler执行结束之后，返回到UTrapframe中的trap-time 的状态。 <br />
+对于trap-time-eip的位置：</p>
+<ul>
+<li>如果trap之前，是执行在normal stack上，那么trap-time-eip位置在 trap-time-esp - 4B上。</li>
+<li>如果trap之前，是执行在exception stack上，那么trap-time-eip位置在Utrapframe之间留出的 4B 上。</li>
+</ul>
+<p>这样，在恢复trap-time-esp的时候，第一个弹出的一定是trap-time-eip。</p>
+<div class="highlight"><pre><span class="p">.</span><span class="n">text</span>
+<span class="p">.</span><span class="n">globl</span> <span class="n">_pgfault_upcall</span>
+<span class="nl">_pgfault_upcall</span><span class="p">:</span>
+  <span class="c1">// Call the C page fault handler.</span>
+  <span class="n">pushl</span> <span class="o">%</span><span class="n">esp</span>      <span class="c1">// function argument: pointer to UTF</span>
+  <span class="n">movl</span> <span class="n">_pgfault_handler</span><span class="p">,</span> <span class="o">%</span><span class="n">eax</span>
+  <span class="n">call</span> <span class="o">*%</span><span class="n">eax</span>
+  <span class="n">addl</span> <span class="err">$</span><span class="mi">4</span><span class="p">,</span> <span class="o">%</span><span class="n">esp</span>     <span class="c1">// pop function argument</span>
+
+  <span class="c1">// ret 指令做的事情就是从stack上popl %eip，然后从这个eip开始执行。</span>
+  <span class="c1">// 一个Excepiton Stack的图对这个的理解有帮助。</span>
+  <span class="c1">// 下面的指令的目的就是把(1)的状态转化为 (2)的状态，同时，恢复</span>
+  <span class="c1">// trap-time-regs, trap-time-esp, trap-time-eflags.</span>
+  <span class="c1">//  </span>
+  <span class="c1">//  +----------USTACKTOP------+   high</span>
+  <span class="c1">//  |            ...          |</span>
+  <span class="c1">//  +-------------------------+</span>
+  <span class="c1">//  |                         |</span>
+  <span class="c1">//  +-------------------------+   </span>
+  <span class="c1">//  |   trap-time-esp    (4B) |</span>
+  <span class="c1">//  +-------------------------+   </span>
+  <span class="c1">//  |   trap-time-eflags (4B) |</span>
+  <span class="c1">//  +-------------------------+   </span>
+  <span class="c1">//  |   trap-time-eip    (4B) |</span>
+  <span class="c1">//  +-------------------------|   low</span>
+  <span class="c1">//  |   trap-time-regs   (32B)|</span>
+  <span class="c1">//  |   ...                   |</span>
+  <span class="c1">//  |   ...                   |</span>
+  <span class="c1">//  +-------------------------+   </span>
+  <span class="c1">//  |   err              (4B) |</span>
+  <span class="c1">//  +-------------------------+   </span>
+  <span class="c1">//  |   fault_va         (4B) | </span>
+  <span class="c1">//  +-------------------------+   &lt;-- cur_esp </span>
+  <span class="c1">//            (1)</span>
+  <span class="c1">//  </span>
+  <span class="c1">//  +----trap-time-stack------+</span>
+  <span class="c1">//  |            ...          |</span>
+  <span class="c1">//  +-------------------------+</span>
+  <span class="c1">//  |   trap-time-eip    (4B) |</span>
+  <span class="c1">//  +-------------------------+   &lt;-- trap_time_esp</span>
+  <span class="c1">//</span>
+  <span class="c1">//            (2)</span>
+  <span class="c1">//  </span>
+  <span class="c1">//  </span>
+  <span class="c1">// Now the C page fault handler has returned and you must return</span>
+  <span class="c1">// to the trap time state.</span>
+  <span class="c1">// Push trap-time %eip onto the trap-time stack.</span>
+  <span class="c1">//</span>
+  <span class="c1">// Explanation:</span>
+  <span class="c1">//   We must prepare the trap-time stack for our eventual return to</span>
+  <span class="c1">//   re-execute the instruction that faulted.</span>
+  <span class="c1">//   Unfortunately, we can&#39;t return directly from the exception stack:</span>
+  <span class="c1">//   We can&#39;t call &#39;jmp&#39;, since that requires that we load the address</span>
+  <span class="c1">//   into a register, and all registers must have their trap-time</span>
+  <span class="c1">//   values after the return.</span>
+  <span class="c1">//   We can&#39;t call &#39;ret&#39; from the exception stack either, since if we</span>
+  <span class="c1">//   did, %esp would have the wrong value.</span>
+  <span class="c1">//   So instead, we push the trap-time %eip onto the *trap-time* stack!</span>
+  <span class="c1">//   Below we&#39;ll switch to that stack and call &#39;ret&#39;, which will</span>
+  <span class="c1">//   restore %eip to its pre-fault value.</span>
+  <span class="c1">//</span>
+  <span class="c1">//   In the case of a recursive fault on the exception stack,</span>
+  <span class="c1">//   note that the word we&#39;re pushing now will fit in the</span>
+  <span class="c1">//   blank word that the kernel reserved for us.</span>
+  <span class="c1">//</span>
+  <span class="c1">// Throughout the remaining code, think carefully about what</span>
+  <span class="c1">// registers are available for intermediate calculations.  You</span>
+  <span class="c1">// may find that you have to rearrange your code in non-obvious</span>
+  <span class="c1">// ways as registers become unavailable as scratch space.</span>
+  <span class="c1">//</span>
+  <span class="c1">// LAB 4: Your code here.</span>
+  <span class="c1">// new_trap_time_esp = trap_time_esp - 4, for storing trap_time_eip.</span>
+  <span class="n">movl</span> <span class="mh">0x30</span><span class="p">(</span><span class="o">%</span><span class="n">esp</span><span class="p">),</span> <span class="o">%</span><span class="n">eax</span>
+  <span class="n">subl</span> <span class="err">$</span><span class="mh">0x4</span><span class="p">,</span> <span class="o">%</span><span class="n">eax</span>
+  <span class="n">movl</span> <span class="o">%</span><span class="n">eax</span><span class="p">,</span> <span class="mh">0x30</span><span class="p">(</span><span class="o">%</span><span class="n">esp</span><span class="p">)</span>
+
+  <span class="c1">// move trap_time_eip to new_trap_time_esp, because exception stack and </span>
+  <span class="c1">// user stack are using the same address sapce, so this will work in</span>
+  <span class="c1">// both user stack and exception stack</span>
+  <span class="n">movl</span> <span class="mh">0x28</span><span class="p">(</span><span class="o">%</span><span class="n">esp</span><span class="p">),</span> <span class="o">%</span><span class="n">ebx</span>
+  <span class="n">movl</span> <span class="o">%</span><span class="n">ebx</span><span class="p">,</span> <span class="p">(</span><span class="o">%</span><span class="n">eax</span><span class="p">)</span>
+
+  <span class="c1">// Restore the trap-time registers.  After you do this, you</span>
+  <span class="c1">// can no longer modify any general-purpose registers.</span>
+  <span class="c1">// LAB 4: Your code here.</span>
+  <span class="n">addl</span> <span class="err">$</span><span class="mh">0x8</span><span class="p">,</span> <span class="o">%</span><span class="n">esp</span>
+  <span class="n">popal</span>
+
+  <span class="c1">// Restore eflags from the stack.  After you do this, you can</span>
+  <span class="c1">// no longer use arithmetic operations or anything else that</span>
+  <span class="c1">// modifies eflags.</span>
+  <span class="c1">// LAB 4: Your code here.</span>
+  <span class="c1">// skip trap_time_eip</span>
+  <span class="n">addl</span> <span class="err">$</span><span class="mh">0x4</span><span class="p">,</span> <span class="o">%</span><span class="n">esp</span>
+  <span class="n">popfl</span>
+
+  <span class="c1">// Switch back to the adjusted trap-time stack.</span>
+  <span class="c1">// LAB 4: Your code here.</span>
+  <span class="n">popl</span> <span class="o">%</span><span class="n">esp</span>
+
+  <span class="c1">// Return to re-execute the instruction that faulted.</span>
+  <span class="c1">// LAB 4: Your code here.</span>
+  <span class="n">ret</span>
+</pre></div>
+
+
+<h4>Exercise 11</h4>
+<p>实现lib对set_pgfault_handler的包装。handler是用户输入的upcall函数，_pgfault_upcall是lib包装的函数。   </p>
+<div class="highlight"><pre><span class="kt">void</span>
+<span class="nf">set_pgfault_handler</span><span class="p">(</span><span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">handler</span><span class="p">)(</span><span class="k">struct</span> <span class="n">UTrapframe</span> <span class="o">*</span><span class="n">utf</span><span class="p">))</span>
+<span class="p">{</span>
+  <span class="kt">int</span> <span class="n">r</span><span class="p">;</span>
+
+  <span class="k">if</span> <span class="p">(</span><span class="n">_pgfault_handler</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">// First time through!</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="n">sys_page_alloc</span><span class="p">(</span><span class="n">thisenv</span><span class="o">-&gt;</span><span class="n">env_id</span><span class="p">,</span> 
+          <span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="p">)(</span><span class="n">UXSTACKTOP</span><span class="o">-</span><span class="n">PGSIZE</span><span class="p">),</span> <span class="n">PTE_U</span> <span class="o">|</span> <span class="n">PTE_P</span> <span class="o">|</span> <span class="n">PTE_W</span><span class="p">);</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> 
+      <span class="n">panic</span><span class="p">(</span><span class="s">&quot;set_pgfault_handler : sys_page_alloc failed. %e.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="n">r</span><span class="p">);</span>
+    <span class="c1">// set page fault upcall</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="n">sys_env_set_pgfault_upcall</span><span class="p">(</span><span class="n">thisenv</span><span class="o">-&gt;</span><span class="n">env_id</span><span class="p">,</span> <span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span><span class="n">_pgfault_upcall</span><span class="p">);</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>
+      <span class="n">panic</span><span class="p">(</span><span class="s">&quot;set_pgfault_handler : sys_env_set_pgfault_upcall failed. %e.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="n">r</span><span class="p">);</span>
+  <span class="p">}</span>
+
+  <span class="c1">// Save handler pointer for assembly to call.</span>
+  <span class="n">_pgfault_handler</span> <span class="o">=</span> <span class="n">handler</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<h3>Exercise 12</h3>
+<h4>Something need to know</h4>
+<p>JOS页表涉及的一个trick：
+在kern/init.c 中mem_init()的时候，初始化kern_pgdir有这样一行:</p>
+<div class="highlight"><pre><span class="cm">/* 关于UVPT, PTSIZE = (PGSIZE*NPTENTRIES)</span>
+<span class="cm"> * ULIM, MMIOBASE --&gt;  +------------------------------+ 0xef800000</span>
+<span class="cm"> *                     |  Cur. Page Table (User R-)   | R-/R-  PTSIZE</span>
+<span class="cm"> *    UVPT      ----&gt;  +------------------------------+ 0xef400000</span>
+<span class="cm"> *                     |          RO PAGES            | R-/R-  PTSIZE</span>
+<span class="cm"> *    UPAGES    ----&gt;  +------------------------------+ 0xef000000</span>
+<span class="cm"> *                     |           RO ENVS            | R-/R-  PTSIZE</span>
+<span class="cm"> * UTOP,UENVS ------&gt;  +------------------------------+ 0xeec00000</span>
+<span class="cm"> */</span> 
+
+
+<span class="n">kern_pgdir</span><span class="p">[</span><span class="n">PDX</span><span class="p">(</span><span class="n">UVPT</span><span class="p">)]</span> <span class="o">=</span> <span class="n">PADDR</span><span class="p">(</span><span class="n">kern_pgdir</span><span class="p">)</span> <span class="o">|</span> <span class="n">PTE_U</span> <span class="o">|</span> <span class="n">PTE_P</span><span class="p">;</span>
+</pre></div>
+
+
+<p>在env_setup_vm 的时候，复制了kern_pgdir中初始化的一部分page_dir( &gt; UTOP),同时将UVPT这个虚拟地址指向了env_pgdir。</p>
+<div class="highlight"><pre><span class="n">memmove</span><span class="p">(</span><span class="n">e</span><span class="o">-&gt;</span><span class="n">env_pgdir</span><span class="p">,</span> <span class="n">kern_pgdir</span><span class="p">,</span> <span class="n">PGSIZE</span><span class="p">);</span>
+<span class="c1">// UVPT maps the env&#39;s own page table read-only.</span>
+<span class="c1">// Permissions: kernel R, user R</span>
+<span class="n">e</span><span class="o">-&gt;</span><span class="n">env_pgdir</span><span class="p">[</span><span class="n">PDX</span><span class="p">(</span><span class="n">UVPT</span><span class="p">)]</span> <span class="o">=</span> <span class="n">PADDR</span><span class="p">(</span><span class="n">e</span><span class="o">-&gt;</span><span class="n">env_pgdir</span><span class="p">)</span> <span class="o">|</span> <span class="n">PTE_P</span> <span class="o">|</span> <span class="n">PTE_U</span><span class="p">;</span>  <span class="c1">// (1)</span>
+</pre></div>
+
+
+<p>在lib/entry.S中定义了如下几个全局变量：</p>
+<div class="highlight"><pre><span class="p">.</span><span class="n">data</span>
+<span class="c1">// Define the global symbols &#39;envs&#39;, &#39;pages&#39;, &#39;uvpt&#39;, and &#39;uvpd&#39;</span>
+<span class="c1">// so that they can be used in C as if they were ordinary global arrays.</span>
+  <span class="p">.</span><span class="n">globl</span> <span class="n">envs</span>
+  <span class="p">.</span><span class="n">set</span> <span class="n">envs</span><span class="p">,</span> <span class="n">UENVS</span>
+  <span class="p">.</span><span class="n">globl</span> <span class="n">pages</span>
+  <span class="p">.</span><span class="n">set</span> <span class="n">pages</span><span class="p">,</span> <span class="n">UPAGES</span>
+  <span class="p">.</span><span class="n">globl</span> <span class="n">uvpt</span>
+  <span class="p">.</span><span class="n">set</span> <span class="n">uvpt</span><span class="p">,</span> <span class="n">UVPT</span>
+  <span class="p">.</span><span class="n">globl</span> <span class="n">uvpd</span>
+  <span class="p">.</span><span class="n">set</span> <span class="n">uvpd</span><span class="p">,</span> <span class="p">(</span><span class="n">UVPT</span><span class="o">+</span><span class="p">(</span><span class="n">UVPT</span><span class="o">&gt;&gt;</span><span class="mi">12</span><span class="p">)</span><span class="o">*</span><span class="mi">4</span><span class="p">)</span>
+</pre></div>
+
+
+<p>对于env_pgdir 和 kern_pgdir来说，都是PGSIZE，可以看作是page_table，也可以看作是page_dir：</p>
+<ul>
+<li>看作是page_table: 那么 PGNUM(va) 为 N 的PTE就存放在 uvpt[N]中。</li>
+<li>看作是page_dir :  那么 uvpd 这个虚拟地址指向的物理页就是env_pgdir对应的物理页. 于是可以uvpd[PDX(va)]就是va对应的pde的内容了。</li>
+</ul>
+<p><strong>为什么 uvpt[PGNUM(va)]就是 va对应的pte的内容？</strong> <br />
+首先，<code>uvpt[PGNUM(va)] = uvpt + PGNUM(va) * sizeof(uvpt)</code>， 因为uvpt 是 pte_t* 类型的，所以 <br />
+<code>uvpt[PGNUM(va)] = uvpt + PGNUM(va)&lt;&lt;2</code>，<code>uvpt = 0xEF40000</code>，也就是说低22位都是0。   </p>
+<div class="highlight"><pre>31            22|21             12 | 11       2| 1 0 | 
+   PDX(UVPT)    |    PDX(va)       |  PTX(va)  |     |
+      a1        |        a2        |     a3    |     |
+</pre></div>
+
+
+<p>这样在地址翻译的时候:</p>
+<ol>
+<li>翻译a1部分，还是对应到env_pgdir对应的物理页 ppn1(在mmu看来ppn1是一个page table)</li>
+<li>翻译a2部分，根据PDX(va) 在 ppn1 的偏移量，找到va对应的page_table的ppn2(在mmu看来，ppn2不是page table，而是physical page)</li>
+<li>在ppn2这个va对应的pagetable中，根据PTX(va)找到va对应的PTE(在mmu 看来，这个不是PTE，而是一个page里面的一个offset 对应的值).</li>
+</ol>
+<p><strong>为什么 uvpd这个虚拟地址指向的就是env_pgdir的物理页？</strong> <br />
+<code>UVPT+(UVPT&gt;&gt;12)*4</code>和<code>UVPT+(UVPT&gt;&gt;10)</code>的区别是:前者能够将第10，11位清零。  <br />
+uvpd 的值就是:</p>
+<div class="highlight"><pre>31            22|21             12 | 11         0 | 
+   PDX(UVPT)    |    PDX(UVPT)     |       0      |
+      a1        |        a2        |              |
+</pre></div>
+
+
+<p>这样在地址翻译的时候: </p>
+<ol>
+<li>根据env_pgdir 对应的ppn1 物理页中，找到a1部分对应的ppn2，ppn2 == ppn1</li>
+<li>从ppn2中找到 a2 部分对应的ppn3， ppn3 = ppn1</li>
+<li>从ppn3中 offset位0，本质就是读取 ppn1中的第0项，也就是env_pgdir中的第0项。</li>
+</ol>
+<p>个人觉得理解了这几点，其他跟着提示就能够把代码写出来了。</p>
+<h4>Exercise 12</h4>
+<p>实现 COW fork，当fork的时候调用duppage将PTE设置为COW，如果当写一个COW的页的时候，产生PGFLT，通过pgfault函数实现COW。 <br />
+注意检查pde是否是PTE_P的。记得把parent env 的page 也设为 PTE_COW, 相当于清除PTE_W，PTE_COW 是software defined。</p>
+<div class="highlight"><pre><span class="c1">// lib/fork.c</span>
+<span class="k">static</span> <span class="kt">int</span>
+<span class="nf">duppage</span><span class="p">(</span><span class="kt">envid_t</span> <span class="n">envid</span><span class="p">,</span> <span class="kt">unsigned</span> <span class="n">pn</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="kt">int</span> <span class="n">r</span><span class="p">;</span>
+  <span class="kt">void</span> <span class="o">*</span> <span class="n">va</span> <span class="o">=</span> <span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="p">)</span> <span class="p">(</span><span class="n">pn</span> <span class="o">&lt;&lt;</span> <span class="n">PGSHIFT</span><span class="p">);</span>
+
+  <span class="c1">// check page dir PTE_P exist</span>
+  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="p">(</span><span class="n">uvpd</span><span class="p">[</span><span class="n">PDX</span><span class="p">(</span><span class="n">pn</span> <span class="o">&lt;&lt;</span> <span class="n">PGSHIFT</span><span class="p">)]</span> <span class="o">&amp;</span> <span class="n">PTE_P</span> <span class="p">))</span> 
+    <span class="n">panic</span><span class="p">(</span><span class="s">&quot;duppage : page dir PTE_P is not set.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+
+  <span class="c1">// check page is PTE_W or PTE_COW</span>
+  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="p">(</span><span class="n">uvpt</span><span class="p">[</span><span class="n">pn</span><span class="p">]</span> <span class="o">&amp;</span> <span class="p">(</span> <span class="n">PTE_W</span> <span class="o">|</span> <span class="n">PTE_COW</span> <span class="p">)))</span>
+    <span class="n">panic</span><span class="p">(</span><span class="s">&quot;duppage : page is not PTE_W or PTE_COW.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+
+  <span class="c1">// map child&#39;s page as PTE_COW</span>
+  <span class="n">r</span> <span class="o">=</span> <span class="n">sys_page_map</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">va</span><span class="p">,</span> <span class="n">envid</span><span class="p">,</span> <span class="n">va</span><span class="p">,</span> <span class="n">PTE_U</span> <span class="o">|</span> <span class="n">PTE_COW</span> <span class="o">|</span> <span class="n">PTE_P</span><span class="p">);</span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">panic</span><span class="p">(</span><span class="s">&quot;duppage : sys_page_map error : %e.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="n">r</span><span class="p">);</span>
+
+  <span class="c1">// remap parent&#39;s page as PTE_COW, make PTE_W invalid.</span>
+  <span class="n">r</span> <span class="o">=</span> <span class="n">sys_page_map</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">va</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">va</span><span class="p">,</span> <span class="n">PTE_U</span> <span class="o">|</span> <span class="n">PTE_COW</span> <span class="o">|</span> <span class="n">PTE_P</span><span class="p">);</span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> 
+    <span class="n">panic</span><span class="p">(</span><span class="s">&quot;dupage : sys_page_map error : %e.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">r</span><span class="p">);</span>
+
+  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<p>pgfault的时候，如果是COW的，从env1将一个page copy到env2 (env1 和 env2 必须是 parent/children 关系或者相同)，在env2中做分为几步：</p>
+<ol>
+<li>在env2 中分配一个新 page，映射到env2_tmp_va</li>
+<li><code>memmove(env2_tmp_va, va, PGSIZE)</code></li>
+<li><code>page_map(env_tmp_va, va)</code></li>
+<li><code>page_ummap(env_tmp_va)</code></li>
+</ol>
+<div class="highlight"><pre><span class="k">static</span> <span class="kt">void</span>
+<span class="nf">pgfault</span><span class="p">(</span><span class="k">struct</span> <span class="n">UTrapframe</span> <span class="o">*</span><span class="n">utf</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="kt">void</span> <span class="o">*</span><span class="n">addr</span> <span class="o">=</span> <span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="p">)</span> <span class="n">utf</span><span class="o">-&gt;</span><span class="n">utf_fault_va</span><span class="p">;</span>
+  <span class="kt">uint32_t</span> <span class="n">err</span> <span class="o">=</span> <span class="n">utf</span><span class="o">-&gt;</span><span class="n">utf_err</span><span class="p">;</span>
+  <span class="kt">int</span> <span class="n">r</span><span class="p">;</span>
+
+  <span class="k">if</span> <span class="p">(</span> <span class="o">!</span><span class="p">(</span><span class="n">uvpd</span><span class="p">[</span><span class="n">PDX</span><span class="p">(</span><span class="n">addr</span><span class="p">)]</span> <span class="o">&amp;</span> <span class="n">PTE_P</span> <span class="p">)</span> <span class="p">)</span> 
+    <span class="n">panic</span><span class="p">(</span><span class="s">&quot;pgfault : page dir PTE_P not set.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+  <span class="k">if</span> <span class="p">(((</span><span class="n">err</span> <span class="o">&amp;</span> <span class="n">FEC_WR</span><span class="p">)</span> <span class="o">!=</span> <span class="n">FEC_WR</span><span class="p">)</span> <span class="o">||</span> <span class="o">!</span><span class="p">(</span><span class="n">uvpt</span><span class="p">[</span><span class="n">PGNUM</span><span class="p">(</span><span class="n">addr</span><span class="p">)]</span> <span class="o">&amp;</span> <span class="n">PTE_COW</span><span class="p">)</span> <span class="p">)</span> 
+    <span class="n">panic</span><span class="p">(</span><span class="s">&quot;pgfault : pagefault %08x not FEC_WR or PTE_COW.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="n">err</span><span class="p">);</span>
+
+  <span class="c1">// allocate  PFTEMP -&gt; new page</span>
+  <span class="n">r</span> <span class="o">=</span> <span class="n">sys_page_alloc</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">PFTEMP</span><span class="p">,</span> <span class="n">PTE_U</span> <span class="o">|</span> <span class="n">PTE_P</span> <span class="o">|</span> <span class="n">PTE_W</span><span class="p">);</span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">panic</span><span class="p">(</span><span class="s">&quot;pgfault : sys_page_alloc error : %e.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="n">r</span><span class="p">);</span>
+
+  <span class="c1">// copy old page  = new page 注意对齐，卡在这里很长时间</span>
+  <span class="n">addr</span> <span class="o">=</span> <span class="n">ROUNDDOWN</span><span class="p">(</span><span class="n">addr</span><span class="p">,</span> <span class="n">PGSIZE</span><span class="p">);</span>
+  <span class="n">memmove</span><span class="p">(</span><span class="n">PFTEMP</span><span class="p">,</span> <span class="n">addr</span><span class="p">,</span> <span class="n">PGSIZE</span><span class="p">);</span>
+
+  <span class="c1">// make addr -&gt; new page</span>
+  <span class="n">r</span> <span class="o">=</span> <span class="n">sys_page_map</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">PFTEMP</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">addr</span><span class="p">,</span> <span class="n">PTE_U</span> <span class="o">|</span> <span class="n">PTE_P</span> <span class="o">|</span> <span class="n">PTE_W</span><span class="p">);</span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">panic</span><span class="p">(</span><span class="s">&quot;pgfault : sys_page_map error : %e.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="n">r</span><span class="p">);</span>
+
+  <span class="c1">// delete map of PFTEMP -&gt; new page</span>
+  <span class="n">r</span> <span class="o">=</span> <span class="n">sys_page_unmap</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">PFTEMP</span><span class="p">);</span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">panic</span><span class="p">(</span><span class="s">&quot;pgfault : sys_page_unmap error : %e.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="n">r</span><span class="p">);</span>
+
+  <span class="k">return</span> <span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<p>所以fork就成这样了</p>
+<div class="highlight"><pre><span class="kt">envid_t</span>
+<span class="nf">fork</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="kt">envid_t</span> <span class="n">envid</span><span class="p">;</span>
+  <span class="kt">uintptr_t</span> <span class="n">va</span><span class="p">;</span>
+  <span class="kt">int</span> <span class="n">r</span><span class="p">;</span>
+
+  <span class="c1">// set pagefault handler</span>
+  <span class="n">set_pgfault_handler</span><span class="p">(</span><span class="n">pgfault</span><span class="p">);</span>
+
+  <span class="c1">// allocate child env</span>
+  <span class="n">envid</span> <span class="o">=</span> <span class="n">sys_exofork</span><span class="p">();</span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">envid</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> 
+    <span class="n">panic</span><span class="p">(</span><span class="s">&quot;fork : sys_exofork error, %e.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">envid</span><span class="p">);</span>
+
+  <span class="c1">// Executing at child </span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">envid</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">thisenv</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">envs</span><span class="p">[</span><span class="n">ENVX</span><span class="p">(</span><span class="n">sys_getenvid</span><span class="p">())];</span>
+    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+  <span class="p">}</span>
+
+  <span class="c1">// Child&#39;s env initialization : </span>
+  <span class="c1">// 1. element in struct Env itself.</span>
+  <span class="c1">// 2. child env&#39;s page table initizlization( address space )</span>
+  <span class="c1">// </span>
+  <span class="c1">// For 1. some part of struct Env is initialized in sys_exefork, </span>
+  <span class="c1">// remaining exception stack and pgfault_upcall to initialize.</span>
+  <span class="c1">// For 2. create envid &#39;s address space</span>
+
+  <span class="c1">// 2.1. Duppage [UTEXT, USTACKTOP] of PTE_W | PTE_COW | PTE_P</span>
+  <span class="c1">// first see if pdt &amp; PTE_P or not</span>
+  <span class="k">for</span> <span class="p">(</span><span class="n">va</span> <span class="o">=</span> <span class="n">UTEXT</span> <span class="p">;</span> <span class="n">va</span> <span class="o">&lt;</span> <span class="n">USTACKTOP</span><span class="p">;</span> <span class="n">va</span> <span class="o">+=</span> <span class="n">PGSIZE</span><span class="p">){</span>
+    <span class="k">if</span> <span class="p">((</span><span class="n">uvpd</span><span class="p">[</span><span class="n">PDX</span><span class="p">(</span><span class="n">va</span><span class="p">)]</span> <span class="o">&amp;</span> <span class="n">PTE_P</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="n">uvpt</span><span class="p">[</span><span class="n">PGNUM</span><span class="p">(</span><span class="n">va</span><span class="p">)]</span> <span class="o">&amp;</span> <span class="n">PTE_P</span><span class="p">)</span> <span class="o">&amp;&amp;</span> 
+        <span class="p">(</span><span class="n">uvpt</span><span class="p">[</span><span class="n">PGNUM</span><span class="p">(</span><span class="n">va</span><span class="p">)]</span> <span class="o">&amp;</span> <span class="n">PTE_U</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="n">uvpt</span><span class="p">[</span><span class="n">PGNUM</span><span class="p">(</span><span class="n">va</span><span class="p">)]</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">PTE_W</span> <span class="o">|</span> <span class="n">PTE_COW</span><span class="p">)))</span>
+      <span class="n">duppage</span><span class="p">(</span><span class="n">envid</span><span class="p">,</span> <span class="n">PGNUM</span><span class="p">(</span><span class="n">va</span><span class="p">));</span>
+
+    <span class="c1">// For pages that are not PTE_W or PTE_COW, just ignore it, some of </span>
+    <span class="c1">// that page are protection consideration.</span>
+  <span class="p">}</span>
+
+  <span class="c1">// 1.2. Create exception stack, parent&#39;s exception stack cannot </span>
+  <span class="c1">// be duppaged ! because at this time it&#39;s page fault are using it, </span>
+  <span class="c1">// and it should be writable.</span>
+  <span class="n">r</span> <span class="o">=</span> <span class="n">sys_page_alloc</span><span class="p">(</span><span class="n">envid</span><span class="p">,</span> <span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="p">)(</span><span class="n">UXSTACKTOP</span><span class="o">-</span><span class="n">PGSIZE</span><span class="p">),</span> <span class="n">PTE_U</span> <span class="o">|</span> <span class="n">PTE_P</span> <span class="o">|</span> <span class="n">PTE_W</span><span class="p">);</span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">panic</span><span class="p">(</span><span class="s">&quot;[%08x] fork : sys_page_alloc error : %e.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">thisenv</span><span class="o">-&gt;</span><span class="n">env_id</span><span class="p">,</span> <span class="n">r</span><span class="p">);</span>
+
+  <span class="c1">// 1.1 Set child&#39;s page fault handler -- initialize </span>
+  <span class="c1">// child_env-&gt;env_pgfault_upcall</span>
+  <span class="n">r</span> <span class="o">=</span> <span class="n">sys_env_set_pgfault_upcall</span><span class="p">(</span><span class="n">envid</span><span class="p">,</span> <span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span><span class="n">_pgfault_upcall</span><span class="p">);</span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">panic</span><span class="p">(</span><span class="s">&quot;[%08x] fork : sys_env_set_pgfault_upcall error : %e.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> 
+      <span class="n">thisenv</span><span class="o">-&gt;</span><span class="n">env_id</span><span class="p">,</span> <span class="n">r</span><span class="p">);</span>
+
+  <span class="c1">// Child is ready to run, make it RUNNABLE</span>
+  <span class="n">r</span> <span class="o">=</span> <span class="n">sys_env_set_status</span><span class="p">(</span><span class="n">envid</span><span class="p">,</span> <span class="n">ENV_RUNNABLE</span><span class="p">);</span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">panic</span><span class="p">(</span><span class="s">&quot;[%08x] fork : sys_env_set_status error : %e&quot;</span><span class="p">,</span><span class="n">thisenv</span><span class="o">-&gt;</span><span class="n">env_id</span><span class="p">,</span> <span class="n">r</span><span class="p">);</span>
+
+  <span class="k">return</span> <span class="n">envid</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<p>-- EOF --</p>
+            </div>
+            <!-- /.entry-content -->
+        </article>
+    </section>
+
+        </div>
+    </div>
+</div>
+<footer>
+   <div class="container">
+      <hr>
+      <div class="row">
+         <div class="col-xs-10">&copy; 2013 zorksylar
+            &middot; Powered by <a href="https://github.com/DandyDev/pelican-bootstrap3" target="_blank">pelican-bootstrap3</a>,
+            <a href="http://docs.getpelican.com/" target="_blank">Pelican</a>,
+            <a href="http://getbootstrap.com" target="_blank">Bootstrap</a>         </div>
+         <div class="col-xs-2"><p class="pull-right"><i class="fa fa-arrow-up"></i> <a href="#">Back to top</a></p></div>
+      </div>
+   </div>
+</footer>
+<script src="http://zorksylar.github.io/theme/js/jquery.min.js"></script>
+
+<!-- Include all compiled plugins (below), or include individual files as needed -->
+<script src="http://zorksylar.github.io/theme/js/bootstrap.min.js"></script>
+
+<!-- Enable responsive features in IE8 with Respond.js (https://github.com/scottjehl/Respond) -->
+<script src="http://zorksylar.github.io/theme/js/respond.min.js"></script>
+
+
+</body>
+</html>

@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en" prefix="og: http://ogp.me/ns# fb: https://www.facebook.com/2008/fbml">
+<head>
+    <title>6.828 Lab2 小结 - Z's Thoughts</title>
+    <!-- Using the latest rendering mode for IE -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+
+
+<link rel="canonical" href="http://zorksylar.github.io/6.828-lab2-writeup.html">
+
+        <meta name="author" content="zorksylar" />
+        <meta name="keywords" content="[6.828,OS]" />
+        <meta name="description" content="Memory初始化" />
+
+        <meta property="og:site_name" content="Z's Thoughts" />
+        <meta property="og:type" content="article"/>
+        <meta property="og:title" content="6.828 Lab2 小结"/>
+        <meta property="og:url" content="http://zorksylar.github.io/6.828-lab2-writeup.html"/>
+        <meta property="og:description" content="Memory初始化"/>
+        <meta property="article:published_time" content="2013-08-12" />
+            <meta property="article:section" content="Blog" />
+            <meta property="article:tag" content="[6.828" />
+            <meta property="article:tag" content="OS]" />
+            <meta property="article:author" content="zorksylar" />
+
+
+
+    <!-- Bootstrap -->
+        <link rel="stylesheet" href="http://zorksylar.github.io/theme/css/bootstrap.min.css" type="text/css"/>
+    <link href="http://zorksylar.github.io/theme/css/font-awesome.min.css" rel="stylesheet">
+
+    <link href="http://zorksylar.github.io/theme/css/pygments/manni.css" rel="stylesheet">
+    <link rel="stylesheet" href="http://zorksylar.github.io/theme/css/style.css" type="text/css"/>
+
+        <link href="http://zorksylar.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate"
+              title="Z's Thoughts ATOM Feed"/>
+
+
+
+        <link href="http://zorksylar.github.io/feeds/blog.atom.xml" type="application/atom+xml" rel="alternate"
+              title="Z's Thoughts Blog ATOM Feed"/>
+
+</head>
+<body>
+
+<div class="navbar navbar-default navbar-fixed-top" role="navigation">
+	<div class="container">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a href="http://zorksylar.github.io/" class="navbar-brand">
+Z's Thoughts            </a>
+        </div>
+        <div class="collapse navbar-collapse navbar-ex1-collapse">
+            <ul class="nav navbar-nav">
+                        <li class="active">
+                            <a href="http://zorksylar.github.io/category/blog.html">Blog</a>
+                        </li>
+            </ul>
+            <ul class="nav navbar-nav navbar-right">
+              <li><a href="http://zorksylar.github.io/archives.html"><i class="fa fa-th-list"></i><span class="icon-label">Archives</span></a></li>
+            </ul>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+</div> <!-- /.navbar -->
+<!-- Banner -->
+<!-- End Banner -->
+<div class="container">
+    <div class="row">
+        <div class="col-lg-12">
+    <section id="content">
+        <article>
+            <header class="page-header">
+                <h1>
+                    <a href="http://zorksylar.github.io/6.828-lab2-writeup.html"
+                       rel="bookmark"
+                       title="Permalink to 6.828 Lab2 小结">
+                        6.828 Lab2 小结
+                    </a>
+                </h1>
+            </header>
+            <div class="entry-content">
+                <div class="panel">
+                    <div class="panel-body">
+<footer class="post-info">
+    <span class="label label-default">Date</span>
+    <span class="published">
+        <i class="fa fa-calendar"></i><time datetime="2013-08-12T00:00:00+08:00"> Mon 12 August 2013</time>
+    </span>
+
+
+
+
+
+<span class="label label-default">Tags</span>
+	<a href="http://zorksylar.github.io/tag/6828.html">[6.828</a>
+        /
+	<a href="http://zorksylar.github.io/tag/os.html">OS]</a>
+    
+</footer><!-- /.post-info -->                    </div>
+                </div>
+                <h3>Background</h3>
+<p>在lab1中，boot的时候，把jos的ELF文件load到了内存中，这个时候，还没有建立jos所需要运行的页表，同时此时已经进入了保护模式，jos最开始会运行kern/entry.S 中的代码。这个代码只做了一件事情，就是建立了一个临时的页表，把VA的[0,4MB]和[KERNBASE, KERNBASE+4MB]映射到PA的[0,4MB]。</p>
+<p>因为jos的ELFload到内存中，因为jos的代码需要运行在VA的KERNBASE + 1MB，所以这样的映射是足够的.在kern/entry.S把临时的页表安装好之后，会跳转到kern/init.c的i386_init()函数继续执行。</p>
+<h3>lab2要做的事情</h3>
+<p>在跳转到i386_init()之后，首先会进行一些初始化，比如把load到内存中的BSS段都memset为0，然后进入kern/pmap.c 的mem_init()中，lab2做的事情也是设计pmap.c的，lab2做这么几个事情:</p>
+<ol>
+<li>初始化jos的页表(因为之前使用的是一个临时的页表，只能在[KERNBASE, KERNBASE+4MB]的虚拟地址上运行。其中包括对物理页的初始化。</li>
+<li>给jos添加页表管理的函数：page_alloc, page_free, page_lookup, page_insert, pgdir_walk等。根据我的理解，所谓的操作系统上的内存管理，其实就是这些页表的管理，还有一些物理页的管理。</li>
+<li>用2中实现的页表管理函数，初始化jos的整个memory layout.</li>
+</ol>
+<p>好吧，因为这个memory layout太重要了，所以就贴在这里了，下面的这个memory layout不是linux kernel的，是jos的，不要看错了。 </p>
+<div class="highlight"><pre>*
+* Virtual memory map:                                Permissions
+*                                                    kernel/user
+*
+*    4 Gig --------&gt;  +------------------------------+
+*                     |                              | RW/--
+*                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*                     :              .               :
+*                     :              .               :
+*                     :              .               :
+*                     |~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~| RW/--
+*                     |                              | RW/--
+*                     |   Remapped Physical Memory   | RW/--
+*                     |                              | RW/--
+*    KERNBASE, ----&gt;  +------------------------------+ 0xf0000000      --+
+*    KSTACKTOP        |     CPU0&#39;s Kernel Stack      | RW/--  KSTKSIZE   |
+*                     | - - - - - - - - - - - - - - -|                   |
+*                     |      Invalid Memory (*)      | --/--  KSTKGAP    |
+*                     +------------------------------+                   |
+*                     |     CPU1&#39;s Kernel Stack      | RW/--  KSTKSIZE   |
+*                     | - - - - - - - - - - - - - - -|                 PTSIZE
+*                     |      Invalid Memory (*)      | --/--  KSTKGAP    |
+*                     +------------------------------+                   |
+*                     :              .               :                   |
+*                     :              .               :                   |
+*    MMIOLIM ------&gt;  +------------------------------+ 0xefc00000      --+
+*                     |       Memory-mapped I/O      | RW/--  PTSIZE
+* ULIM, MMIOBASE --&gt;  +------------------------------+ 0xef800000
+*                     |  Cur. Page Table (User R-)   | R-/R-  PTSIZE
+*    UVPT      ----&gt;  +------------------------------+ 0xef400000
+*                     |          RO PAGES            | R-/R-  PTSIZE
+*    UPAGES    ----&gt;  +------------------------------+ 0xef000000
+*                     |           RO ENVS            | R-/R-  PTSIZE
+* UTOP,UENVS ------&gt;  +------------------------------+ 0xeec00000
+* UXSTACKTOP -/       |     User Exception Stack     | RW/RW  PGSIZE
+*                     +------------------------------+ 0xeebff000
+*                     |       Empty Memory (*)       | --/--  PGSIZE
+*    USTACKTOP  ---&gt;  +------------------------------+ 0xeebfe000
+*                     |      Normal User Stack       | RW/RW  PGSIZE
+*                     +------------------------------+ 0xeebfd000
+*                     |                              |
+*                     |                              |
+*                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*                     .                              .
+*                     .                              .
+*                     .                              .
+*                     |~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~|
+*                     |     Program Data &amp; Heap      |
+*    UTEXT --------&gt;  +------------------------------+ 0x00800000
+*    PFTEMP -------&gt;  |       Empty Memory (*)       |        PTSIZE
+*                     |                              |
+*    UTEMP --------&gt;  +------------------------------+ 0x00400000      --+
+*                     |       Empty Memory (*)       |                   |
+*                     | - - - - - - - - - - - - - - -|                   |
+*                     |  User STAB Data (optional)   |                 PTSIZE
+*    USTABDATA ----&gt;  +------------------------------+ 0x00200000        |
+*                     |       Empty Memory (*)       |                   |
+*    0 ------------&gt;  +------------------------------+                 --+
+*
+* (*) Note: The kernel ensures that &quot;Invalid Memory&quot; (ULIM) is *never*
+*     mapped.  &quot;Empty Memory&quot; is normally unmapped, but user programs may
+*     map pages there if desired.  JOS user programs map pages temporarily
+*     at UTEMP.
+*/
+</pre></div>
+
+
+<h3>mem_init 做的事情</h3>
+<h4>1. 有多少个物理页</h4>
+<p>在mem_init()中首先进入i386_detect_memory()，记录有多少个物理页，在这里注意有个io_hole : </p>
+<div class="highlight"><pre>    +---------------------------------------+
+    |base_mem |  io_hole |  ext_mem         |
+    +---------------------------------------+
+pa  0       640k      1024k
+</pre></div>
+
+
+<p>所以说npages 和 npages_basemem + npages_extmem是相差384k大小。</p>
+<h4>2. 分配kern_pgdir</h4>
+<p>然后，通过boot_alloc函数，在bss后面分配一个PGSIZE大小的空间，作为kern_pgdir ( kernel的page directory)。
+关于boot_alloc函数：这个函数只是在初始化kernel的页表的时候使用，注意一点：</p>
+<p><strong>因为这个时候jos还是跑在之前设定的[KERNBASE, KERNBASE+4MB]的地址空间上，使用的页表也是之前entrypgdir.c中设定的页表，所以分配的虚拟地址是有限的只能在KERNBASE 到 KERNBASE+4MB这个范围内。</strong></p>
+<h4>3. 在kern_pgdir中插入一条 VA 未UVPT 到 kern_pgdir所在的PA的映射</h4>
+<div class="highlight"><pre>      <span class="n">kern_pgdir</span><span class="p">[</span><span class="n">PDX</span><span class="p">(</span><span class="n">UVPT</span><span class="p">)]</span> <span class="o">=</span> <span class="n">PADDR</span><span class="p">(</span><span class="n">kern_pgdir</span><span class="p">)</span> <span class="o">|</span> <span class="n">PTE_U</span> <span class="o">|</span> <span class="n">PTE_P</span><span class="p">;</span>
+</pre></div>
+
+
+<p>UVPT : user virtual page table , 对 USER 是 RO 的。
+另外还要注意这里的PADDR，因为jos的程序是运行在虚拟地址空间上的，所以kern_pgdir的值也是一个虚拟地址，不是实际的物理地址，因为当前使用的页表还是在ELF执行的时候最开始设置的页表，所以PADDR(kern_pgdir) 就是把 kern_pgdir - KERNBASE。</p>
+<h4>4. 非配所有管理物理页元数据数组 pages</h4>
+<p>物理页元数据:</p>
+<div class="highlight"><pre><span class="cm">/*</span>
+<span class="cm"> * Page descriptor structures, mapped at UPAGES.</span>
+<span class="cm"> * Read/write to the kernel, read-only to user programs.</span>
+<span class="cm"> *</span>
+<span class="cm"> * Each struct PageInfo stores metadata for one physical page.</span>
+<span class="cm"> * Is it NOT the physical page itself, but there is a one-to-one</span>
+<span class="cm"> * correspondence between physical pages and struct PageInfo&#39;s.</span>
+<span class="cm"> * You can map a struct PageInfo * to the corresponding physical address</span>
+<span class="cm"> * with page2pa() in kern/pmap.h.</span>
+<span class="cm"> */</span>
+
+<span class="k">struct</span> <span class="n">PageInfo</span> <span class="p">{</span>
+  <span class="c1">// Next page on the free list.</span>
+  <span class="k">struct</span> <span class="n">PageInfo</span> <span class="o">*</span><span class="n">pp_link</span><span class="p">;</span>
+
+  <span class="c1">// pp_ref is the count of pointers (usually in page table entries)</span>
+  <span class="c1">// to this page, for pages allocated using page_alloc.</span>
+  <span class="c1">// Pages allocated at boot time using pmap.c&#39;s</span>
+  <span class="c1">// boot_alloc do not have valid reference count fields.</span>
+
+  <span class="kt">uint16_t</span> <span class="n">pp_ref</span><span class="p">;</span>
+<span class="p">};</span>
+</pre></div>
+
+
+<p>kernel管理的物理页数组：</p>
+<div class="highlight"><pre><span class="k">struct</span> <span class="n">PageInfo</span> <span class="o">*</span><span class="n">pages</span><span class="p">;</span>   <span class="c1">// Physical page state array</span>
+
+<span class="c1">//////////////////////////////////////////////////////////////////////</span>
+<span class="c1">// Allocate an array of npages &#39;struct PageInfo&#39;s and store it in &#39;pages&#39;.</span>
+<span class="c1">// The kernel uses this array to keep track of physical pages: for</span>
+<span class="c1">// each physical page, there is a corresponding struct PageInfo in this</span>
+<span class="c1">// array.  &#39;npages&#39; is the number of physical pages in memory.</span>
+<span class="c1">// Your code goes here:</span>
+<span class="n">pages</span> <span class="o">=</span> <span class="p">(</span><span class="k">struct</span> <span class="n">PageInfo</span> <span class="o">*</span><span class="p">)</span><span class="n">boot_alloc</span><span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="k">struct</span> <span class="n">PageInfo</span><span class="p">)</span> <span class="o">*</span> <span class="n">npages</span><span class="p">);</span>
+</pre></div>
+
+
+<p>PageInfo 和 physical address 的转换：</p>
+<div class="highlight"><pre><span class="k">static</span> <span class="kr">inline</span> <span class="kt">physaddr_t</span>
+<span class="nf">page2pa</span><span class="p">(</span><span class="k">struct</span> <span class="n">PageInfo</span> <span class="o">*</span><span class="n">pp</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="k">return</span> <span class="p">(</span><span class="n">pp</span> <span class="o">-</span> <span class="n">pages</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">PGSHIFT</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">static</span> <span class="kr">inline</span> <span class="k">struct</span> <span class="n">PageInfo</span><span class="o">*</span>
+<span class="nf">pa2page</span><span class="p">(</span><span class="kt">physaddr_t</span> <span class="n">pa</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">PGNUM</span><span class="p">(</span><span class="n">pa</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">npages</span><span class="p">)</span>
+    <span class="n">panic</span><span class="p">(</span><span class="s">&quot;pa2page called with invalid pa&quot;</span><span class="p">);</span>
+  <span class="k">return</span> <span class="o">&amp;</span><span class="n">pages</span><span class="p">[</span><span class="n">PGNUM</span><span class="p">(</span><span class="n">pa</span><span class="p">)];</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<p><strong>pages 既是一个数组，也是一个链表。</strong>  需要进行pa和pageinfo的映射的时候，那么就是数组，需要管理page_free_list的时候，通过pp_link，就能把数组中的一些值链接起来，就是链表。不得不感叹jos中代码的精巧。。。空间没有一点浪费。</p>
+<h4>5. 物理页数组npages的初始化</h4>
+<p>标记那些物理页已经使用了，同时把没有使用的物理页通过pp_link链接起来，用page_free_list管理。注意，在bss之后分配的物理页，都是用boot_alloc分配的，boot_alloc函数中又一个static 的变量 nextfree，这个变量指向下一个没有使用的连续的物理页，通过这个变量可以知道bss之后的物理页，那些使用了，那些没有使用。 注意IOHOLE必须标记为使用过的。</p>
+<h4>6. 根据虚拟地址的memory_layout 在kern_pgdir中插入对应的页表项</h4>
+<h4>7. 使用新的页表 kern_pgdir 和重新设置一些flag</h4>
+<div class="highlight"><pre><span class="n">lcr3</span><span class="p">(</span><span class="n">PADDR</span><span class="p">(</span><span class="n">kern_pgdir</span><span class="p">));</span>
+<span class="p">....</span>
+</pre></div>
+
+
+<h3>页表管理函数</h3>
+<p>注意两点：</p>
+<p><strong>在jos的代码运行的时候，都是运行在虚拟地址空间上的，指针都是虚拟地址，一个指针指向的值也是一个虚拟的地址，不是物理地址。在jos中，为了区分虚拟地址和物理地址：</strong></p>
+<div class="highlight"><pre><span class="c1">// Pointers and addresses are 32 bits long.</span>
+<span class="c1">// We use pointer types to represent virtual addresses,</span>
+<span class="c1">// uintptr_t to represent the numerical values of virtual addresses,</span>
+<span class="c1">// and physaddr_t to represent physical addresses.</span>
+<span class="k">typedef</span> <span class="kt">int32_t</span> <span class="kt">intptr_t</span><span class="p">;</span>
+<span class="k">typedef</span> <span class="kt">uint32_t</span> <span class="kt">uintptr_t</span><span class="p">;</span>
+<span class="k">typedef</span> <span class="kt">uint32_t</span> <span class="kt">physaddr_t</span><span class="p">;</span> 
+</pre></div>
+
+
+<p>所以在给指针本身赴值的时候，需要谨慎。如，在pgdir_walk函数中:</p>
+<div class="highlight"><pre><span class="c1">// Given &#39;pgdir&#39;, a pointer to a page directory, pgdir_walk returns</span>
+<span class="c1">// a pointer to the page table entry (PTE) for linear address &#39;va&#39;.</span>
+<span class="c1">// This requires walking the two-level page table structure.</span>
+<span class="c1">//</span>
+<span class="c1">// The relevant page table page might not exist yet.</span>
+<span class="c1">// If this is true, and create == false, then pgdir_walk returns NULL.</span>
+<span class="c1">// Otherwise, pgdir_walk allocates a new page table page with page_alloc.</span>
+<span class="c1">//    - If the allocation fails, pgdir_walk returns NULL.</span>
+<span class="c1">//    - Otherwise, the new page&#39;s reference count is incremented,</span>
+<span class="c1">//  the page is cleared,</span>
+<span class="c1">//  and pgdir_walk returns a pointer into the new page table page.</span>
+<span class="c1">//</span>
+<span class="c1">// Hint 1: you can turn a Page * into the physical address of the</span>
+<span class="c1">// page it refers to with page2pa() from kern/pmap.h.</span>
+<span class="c1">//</span>
+<span class="c1">// Hint 2: the x86 MMU checks permission bits in both the page directory</span>
+<span class="c1">// and the page table, so it&#39;s safe to leave permissions in the page</span>
+<span class="c1">// more permissive than strictly necessary.</span>
+<span class="c1">//</span>
+<span class="c1">// Hint 3: look at inc/mmu.h for useful macros that mainipulate page</span>
+<span class="c1">// table and page directory entries.</span>
+<span class="c1">//</span>
+<span class="kt">pte_t</span> <span class="o">*</span>
+<span class="nf">pgdir_walk</span><span class="p">(</span><span class="kt">pde_t</span> <span class="o">*</span><span class="n">pgdir</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">va</span><span class="p">,</span> <span class="kt">int</span> <span class="n">create</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="kt">pde_t</span> <span class="o">*</span><span class="n">pde</span><span class="p">;</span>
+  <span class="kt">pte_t</span> <span class="o">*</span><span class="n">pgtab</span><span class="p">;</span>
+  <span class="k">struct</span> <span class="n">PageInfo</span> <span class="o">*</span><span class="n">pp</span><span class="p">;</span>
+
+  <span class="n">pde</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">pgdir</span><span class="p">[</span><span class="n">PDX</span><span class="p">(</span><span class="n">va</span><span class="p">)];</span>
+  <span class="k">if</span> <span class="p">(</span><span class="o">*</span><span class="n">pde</span> <span class="o">&amp;</span> <span class="n">PTE_P</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">pgtab</span> <span class="o">=</span> <span class="p">(</span><span class="kt">pte_t</span><span class="o">*</span><span class="p">)</span><span class="n">KADDR</span><span class="p">(</span><span class="n">PTE_ADDR</span><span class="p">(</span><span class="o">*</span><span class="n">pde</span><span class="p">));</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">create</span> <span class="o">||</span> <span class="p">(</span><span class="n">pp</span> <span class="o">=</span> <span class="n">page_alloc</span><span class="p">(</span><span class="n">ALLOC_ZERO</span><span class="p">))</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+      <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="n">pp</span><span class="o">-&gt;</span><span class="n">pp_ref</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="n">pgtab</span> <span class="o">=</span> <span class="p">(</span><span class="kt">pte_t</span><span class="o">*</span><span class="p">)</span><span class="n">KADDR</span><span class="p">(</span><span class="n">page2pa</span><span class="p">(</span><span class="n">pp</span><span class="p">));</span>
+    <span class="o">*</span><span class="n">pde</span> <span class="o">=</span> <span class="n">PADDR</span><span class="p">(</span><span class="n">pgtab</span><span class="p">)</span> <span class="o">|</span> <span class="n">PTE_P</span> <span class="o">|</span> <span class="n">PTE_W</span> <span class="o">|</span> <span class="n">PTE_U</span><span class="p">;</span>
+  <span class="p">}</span>
+  <span class="k">return</span> <span class="o">&amp;</span><span class="n">pgtab</span><span class="p">[</span><span class="n">PTX</span><span class="p">(</span><span class="n">va</span><span class="p">)];</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<p>在给pgtab赋值的时候，pgtab指向的是一个虚拟地址，然后通过h/w的mmu的转换，能够将pgtab指向的虚拟地址映射到我们想要让他映射到的实际的物理地址上就需要做KADDR这样的转换。</p>
+<p><strong>在page_insert中的一个trick : 如果已经有一个page 映射在va上，那么需要先将这个page删除掉，但是如果page_insert同一个va很多次的时候，每次都要删除这个page，更优雅的做法:</strong></p>
+<div class="highlight"><pre><span class="p">(</span><span class="n">pp</span><span class="o">-&gt;</span> <span class="n">pp_ref</span><span class="p">)</span> <span class="o">++</span><span class="p">;</span>
+<span class="k">if</span> <span class="p">(</span><span class="o">*</span><span class="n">pte</span> <span class="o">&amp;</span> <span class="n">PTE_P</span> <span class="p">)</span> 
+  <span class="n">page_remove</span><span class="p">(</span><span class="n">pgdir</span><span class="p">,</span> <span class="n">va</span><span class="p">);</span>
+</pre></div>
+
+
+<p>--- EOF ---</p>
+            </div>
+            <!-- /.entry-content -->
+        </article>
+    </section>
+
+        </div>
+    </div>
+</div>
+<footer>
+   <div class="container">
+      <hr>
+      <div class="row">
+         <div class="col-xs-10">&copy; 2013 zorksylar
+            &middot; Powered by <a href="https://github.com/DandyDev/pelican-bootstrap3" target="_blank">pelican-bootstrap3</a>,
+            <a href="http://docs.getpelican.com/" target="_blank">Pelican</a>,
+            <a href="http://getbootstrap.com" target="_blank">Bootstrap</a>         </div>
+         <div class="col-xs-2"><p class="pull-right"><i class="fa fa-arrow-up"></i> <a href="#">Back to top</a></p></div>
+      </div>
+   </div>
+</footer>
+<script src="http://zorksylar.github.io/theme/js/jquery.min.js"></script>
+
+<!-- Include all compiled plugins (below), or include individual files as needed -->
+<script src="http://zorksylar.github.io/theme/js/bootstrap.min.js"></script>
+
+<!-- Enable responsive features in IE8 with Respond.js (https://github.com/scottjehl/Respond) -->
+<script src="http://zorksylar.github.io/theme/js/respond.min.js"></script>
+
+
+</body>
+</html>

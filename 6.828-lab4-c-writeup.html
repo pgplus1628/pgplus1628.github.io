@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en" prefix="og: http://ogp.me/ns# fb: https://www.facebook.com/2008/fbml">
+<head>
+    <title>6.828 Lab4 PartC 小结 - Z's Thoughts</title>
+    <!-- Using the latest rendering mode for IE -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+
+
+<link rel="canonical" href="http://zorksylar.github.io/6.828-lab4-c-writeup.html">
+
+        <meta name="author" content="zorksylar" />
+        <meta name="keywords" content="[6.828,OS]" />
+        <meta name="description" content="Preemptive Multitasking and Inter-Process communication" />
+
+        <meta property="og:site_name" content="Z's Thoughts" />
+        <meta property="og:type" content="article"/>
+        <meta property="og:title" content="6.828 Lab4 PartC 小结"/>
+        <meta property="og:url" content="http://zorksylar.github.io/6.828-lab4-c-writeup.html"/>
+        <meta property="og:description" content="Preemptive Multitasking and Inter-Process communication"/>
+        <meta property="article:published_time" content="2013-09-08" />
+            <meta property="article:section" content="Blog" />
+            <meta property="article:tag" content="[6.828" />
+            <meta property="article:tag" content="OS]" />
+            <meta property="article:author" content="zorksylar" />
+
+
+
+    <!-- Bootstrap -->
+        <link rel="stylesheet" href="http://zorksylar.github.io/theme/css/bootstrap.min.css" type="text/css"/>
+    <link href="http://zorksylar.github.io/theme/css/font-awesome.min.css" rel="stylesheet">
+
+    <link href="http://zorksylar.github.io/theme/css/pygments/manni.css" rel="stylesheet">
+    <link rel="stylesheet" href="http://zorksylar.github.io/theme/css/style.css" type="text/css"/>
+
+        <link href="http://zorksylar.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate"
+              title="Z's Thoughts ATOM Feed"/>
+
+
+
+        <link href="http://zorksylar.github.io/feeds/blog.atom.xml" type="application/atom+xml" rel="alternate"
+              title="Z's Thoughts Blog ATOM Feed"/>
+
+</head>
+<body>
+
+<div class="navbar navbar-default navbar-fixed-top" role="navigation">
+	<div class="container">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a href="http://zorksylar.github.io/" class="navbar-brand">
+Z's Thoughts            </a>
+        </div>
+        <div class="collapse navbar-collapse navbar-ex1-collapse">
+            <ul class="nav navbar-nav">
+                        <li class="active">
+                            <a href="http://zorksylar.github.io/category/blog.html">Blog</a>
+                        </li>
+            </ul>
+            <ul class="nav navbar-nav navbar-right">
+              <li><a href="http://zorksylar.github.io/archives.html"><i class="fa fa-th-list"></i><span class="icon-label">Archives</span></a></li>
+            </ul>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+</div> <!-- /.navbar -->
+<!-- Banner -->
+<!-- End Banner -->
+<div class="container">
+    <div class="row">
+        <div class="col-lg-12">
+    <section id="content">
+        <article>
+            <header class="page-header">
+                <h1>
+                    <a href="http://zorksylar.github.io/6.828-lab4-c-writeup.html"
+                       rel="bookmark"
+                       title="Permalink to 6.828 Lab4 PartC 小结">
+                        6.828 Lab4 PartC 小结
+                    </a>
+                </h1>
+            </header>
+            <div class="entry-content">
+                <div class="panel">
+                    <div class="panel-body">
+<footer class="post-info">
+    <span class="label label-default">Date</span>
+    <span class="published">
+        <i class="fa fa-calendar"></i><time datetime="2013-09-08T00:00:00+08:00"> Sun 08 September 2013</time>
+    </span>
+
+
+
+
+
+<span class="label label-default">Tags</span>
+	<a href="http://zorksylar.github.io/tag/6828.html">[6.828</a>
+        /
+	<a href="http://zorksylar.github.io/tag/os.html">OS]</a>
+    
+</footer><!-- /.post-info -->                    </div>
+                </div>
+                <h3>Preemptive Multitasking and Inter-Process communication</h3>
+<p>PartC 任务是实现一个抢占式的多任务处理和进程间通信。
+Concepts: <code>interrupt</code>, <code>ipc</code>, <code>preemptive_multitasking</code>.</p>
+<h3>Exercise 13,14</h3>
+<h4>Something need to konw</h4>
+<p>为了防止一个进程长时间的占用CPU而不释放，所以需要能够让kernel剥夺一个正在运行的进程占用CPU，为此，JOS kernel 支持外部硬件中断。在JOS 中，外部中断在<code>inc/trap.h</code>中有定义。在JOS中，对IRQ做了一些化简，当在内核态下的时候，外部中断被禁止，在用户态下的时候，外部中断被允许。禁止和允许外部中断是通过设置<code>EFLAG</code>寄存器中的<code>IF</code>标志位实现的（详见intel x86的手册)。<br />
+Trap 和 Interrupt 的区别：</p>
+<ul>
+<li>对于Interrupt，在通过Interrupt Gate的时候，会把<code>EFLAGS</code>中的<code>IF</code>标志位清零，不允许中断。</li>
+<li>对于Trap，不会修改<code>IF</code>标志位。</li>
+</ul>
+<p>在JOS中，通过SETGATE中的istrap可以设置。</p>
+<div class="highlight"><pre><span class="cp">#define STS_CG32  0xC     </span><span class="c1">// 32-bit Call Gate</span>
+<span class="cp">#define STS_IG32  0xE     </span><span class="c1">// 32-bit Interrupt Gate</span>
+<span class="cp">#define STS_TG32  0xF     </span><span class="c1">// 32-bit Trap Gate</span>
+
+<span class="c1">// Set up a normal interrupt/trap gate descriptor.</span>
+<span class="c1">// - istrap: 1 for a trap (= exception) gate, 0 for an interrupt gate.</span>
+    <span class="c1">//   see section 9.6.1.3 of the i386 reference: &quot;The difference between</span>
+    <span class="c1">//   an interrupt gate and a trap gate is in the effect on IF (the</span>
+    <span class="c1">//   interrupt-enable flag). An interrupt that vectors through an</span>
+    <span class="c1">//   interrupt gate resets IF, thereby preventing other interrupts from</span>
+    <span class="c1">//   interfering with the current interrupt handler. A subsequent IRET</span>
+    <span class="c1">//   instruction restores IF to the value in the EFLAGS image on the</span>
+    <span class="c1">//   stack. An interrupt through a trap gate does not change IF.&quot;</span>
+<span class="c1">// - sel: Code segment selector for interrupt/trap handler</span>
+<span class="c1">// - off: Offset in code segment for interrupt/trap handler</span>
+<span class="c1">// - dpl: Descriptor Privilege Level -</span>
+<span class="c1">//    the privilege level required for software to invoke</span>
+<span class="c1">//    this interrupt/trap gate explicitly using an int instruction.</span>
+<span class="cp">#define SETGATE(gate, istrap, sel, off, dpl)      \</span>
+<span class="cp">{               \</span>
+<span class="cp">  (gate).gd_off_15_0 = (uint32_t) (off) &amp; 0xffff;   \</span>
+<span class="cp">  (gate).gd_sel = (sel);          \</span>
+<span class="cp">  (gate).gd_args = 0;         \</span>
+<span class="cp">  (gate).gd_rsv1 = 0;         \</span>
+<span class="cp">  (gate).gd_type = (istrap) ? STS_TG32 : STS_IG32;  \</span>
+<span class="cp">  (gate).gd_s = 0;          \</span>
+<span class="cp">  (gate).gd_dpl = (dpl);          \</span>
+<span class="cp">  (gate).gd_p = 1;          \</span>
+<span class="cp">  (gate).gd_off_31_16 = (uint32_t) (off) &gt;&gt; 16;   \</span>
+<span class="cp">}</span>
+</pre></div>
+
+
+<h4>Exercise 13</h4>
+<p>初始化IDT使得JOS能够handle外部中断。在<code>kern/trapentry.S</code>中添加相应的条目，同时在<code>kern/trap.c</code>中初始化interrupt gate, 注意在SETGATE的时候，istrap要置位0表示这是一个Interrupt，在进入内核态之后，外部中断被禁止。同时在<code>kern/env.c</code>中的<code>env_alloc</code>中初始化eflags。当在进入trap的时候，保存进程的<code>trapframe</code>，其中包含<code>eflags</code>，这样在中断处理结束之后，从内核态转到用户态的时候，通过<code>trapframe</code>恢复<code>eflags</code>，这样就保证了在恢复到用户态的时候，允许外部中断。</p>
+<div class="highlight"><pre><span class="c1">// Enable interrupts while in user mode.</span>
+<span class="c1">// LAB 4: Your code here.</span>
+<span class="c1">// Set FL_IF, so when return in user mode, eflags will be enabled.</span>
+<span class="n">e</span><span class="o">-&gt;</span><span class="n">env_tf</span><span class="p">.</span><span class="n">tf_eflags</span> <span class="o">=</span> <span class="n">e</span><span class="o">-&gt;</span><span class="n">env_tf</span><span class="p">.</span><span class="n">tf_eflags</span> <span class="o">|</span> <span class="n">FL_IF</span><span class="p">;</span>
+</pre></div>
+
+
+<h4>Exercise 14</h4>
+<p>为了能够让kernel拿到CPU的控制权，需要每隔一段时间差生一个外部中断，在内核初始化的时候，通过调用<code>lapic_init</code>和<code>pic_init</code>设置好了硬件会每隔一段时间产生外部中断，这个Exercise要做的就是在产生中断的时候，通过IDT找到中断处理函数，让内核拿到CPU的控制权，调度其他进程。</p>
+<div class="highlight"><pre><span class="c1">// Handle clock interrupts. Don&#39;t forget to acknowledge the</span>
+<span class="c1">// interrupt using lapic_eoi() before calling the scheduler!</span>
+<span class="c1">// LAB 4: Your code here.</span>
+<span class="k">if</span> <span class="p">(</span><span class="n">tf</span><span class="o">-&gt;</span><span class="n">tf_trapno</span> <span class="o">==</span> <span class="n">IRQ_OFFSET</span> <span class="o">+</span> <span class="n">IRQ_TIMER</span><span class="p">){</span>
+  <span class="n">lapic_eoi</span><span class="p">();</span>
+  <span class="n">sched_yield</span><span class="p">();</span>
+  <span class="k">return</span> <span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<h3>Exercise 15</h3>
+<h4>Something need to know</h4>
+<p>这部分是实现IPC，在JOS中，实现IPC，需要实现<code>sys_ipc_recv</code>和<code>sys_ipc_try_send</code>系统调用，和两个lib的包装函数<code>ipc_recv</code>和<code>ipc_send</code>。IPC的简要过程：</p>
+<ol>
+<li>sendenv 通过调用 ipc_send, 因为可能recvenv还没有执行到ipc_recv，所以recvenv的<code>env_ipc_recving</code>字段还是<code>false</code>，ipc_send就需要不断的调用sys_ipc_try_send来发送消息</li>
+<li>recvenv 通过调用 ipc_recv，ipc_recv调用 sys_ipc_recv系统调用，修改自己env 中的状态信息。</li>
+<li>当recvenv的<code>env_ipc_recving</code>为<code>true</code>的时候，kernel负责将32bit value 和 page mapping 传递给recvenv,同时将recvenv的状态修改。使得recvenv可以被调度。</li>
+</ol>
+<h4>Exercise 15</h4>
+<p>IPC传送的消息包含两部分：32 bit value 和 single page mapping。 page mapping 作为消息的一部，可以实现任意两个进程共享一块内存，同时，如果传送的消息比较大，可以通过page mapping 实现消息传送。 <br />
+为了实现IPC，在<code>struct Env</code>中，多出了以下字段：</p>
+<div class="highlight"><pre><span class="c1">// Lab 4 IPC</span>
+<span class="kt">bool</span> <span class="n">env_ipc_recving</span><span class="p">;</span>   <span class="c1">// Env is blocked receiving，表示env等待消息中。如果env_ipc_recving位false，那么任何发送进程都不能将消息发送到这个env中。</span>
+<span class="kt">void</span> <span class="o">*</span><span class="n">env_ipc_dstva</span><span class="p">;</span>    <span class="c1">// VA at which to map received page. 消息中的page mapping 部分</span>
+<span class="kt">uint32_t</span> <span class="n">env_ipc_value</span><span class="p">;</span>   <span class="c1">// Data value sent to us, 消息中的 32bit value 部分</span>
+<span class="kt">envid_t</span> <span class="n">env_ipc_from</span><span class="p">;</span>   <span class="c1">// envid of the sender,如果收到消息，记录消息的发送者</span>
+<span class="kt">int</span> <span class="n">env_ipc_perm</span><span class="p">;</span>   <span class="c1">// Perm of page mapping received, 消息中的page mapping 部分</span>
+</pre></div>
+
+
+<p>注意在<code>env_alloc</code>中，初始化对应的<code>struct Env</code>字段。</p>
+<p><strong>sys_ipc_recv</strong> : 进程通过调用这个系统调用，实现接受消息。当进程调用这个系统调用的时候，内核会阻塞这个进程，将env的状态设置位<code>ENV_NOT_RUNNABLE</code>，直到接受到任何进程发送的消息为止，这个进程才能得到调度。注意，对发送消息的进程没有parent 进程的限制，任何进程都能发送消息给任何进程(在JOS中)。注意对参数的检查。如果不接受传递的page mapping，只需要将<code>dstva</code>置为<code>UTOP</code>就可以了， </p>
+<div class="highlight"><pre><span class="c1">// Block until a value is ready.  Record that you want to receive</span>
+<span class="c1">// using the env_ipc_recving and env_ipc_dstva fields of struct Env,</span>
+<span class="c1">// mark yourself not runnable, and then give up the CPU.</span>
+<span class="c1">//</span>
+<span class="c1">// If &#39;dstva&#39; is &lt; UTOP, then you are willing to receive a page of data.</span>
+<span class="c1">// &#39;dstva&#39; is the virtual address at which the sent page should be mapped.</span>
+<span class="c1">//</span>
+<span class="c1">// This function only returns on error, but the system call will eventually</span>
+<span class="c1">// return 0 on success.</span>
+<span class="c1">// Return &lt; 0 on error.  Errors are:</span>
+<span class="c1">//  -E_INVAL if dstva &lt; UTOP but dstva is not page-aligned.</span>
+<span class="k">static</span> <span class="kt">int</span>
+<span class="nf">sys_ipc_recv</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">dstva</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="c1">// LAB 4: Your code here.</span>
+  <span class="c1">// check dstva</span>
+  <span class="k">if</span> <span class="p">((</span><span class="kt">uintptr_t</span><span class="p">)</span><span class="n">dstva</span> <span class="o">&lt;</span> <span class="n">UTOP</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="n">PGOFF</span><span class="p">(</span><span class="n">dstva</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">))</span>
+    <span class="k">return</span> <span class="o">-</span><span class="n">E_INVAL</span><span class="p">;</span>
+
+  <span class="c1">// if dstva &gt;= UTOP , do nothing.</span>
+
+  <span class="c1">// Record this env want to receive</span>
+  <span class="n">curenv</span><span class="o">-&gt;</span><span class="n">env_ipc_recving</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+  <span class="n">curenv</span><span class="o">-&gt;</span><span class="n">env_ipc_dstva</span> <span class="o">=</span> <span class="n">dstva</span><span class="p">;</span>
+
+  <span class="c1">// Block this env, and giveup CPU</span>
+  <span class="n">curenv</span><span class="o">-&gt;</span><span class="n">env_status</span> <span class="o">=</span> <span class="n">ENV_NOT_RUNNABLE</span><span class="p">;</span>
+
+  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<p><strong>sys_ipc_try_send</strong> : 检查参数，同时传递32bit value 和 page mapping。这里有个trick，因为srcva的范围必须在<code>UTOP</code>之下，所以如何判断是否进行page mapping 呢？只要传递srcva &gt;= UTOP 就可以了，只要让系统调用对这种情况不做处理，不抛出<code>-E_INVAL</code>。</p>
+<div class="highlight"><pre><span class="k">static</span> <span class="kt">int</span>
+<span class="nf">sys_ipc_try_send</span><span class="p">(</span><span class="kt">envid_t</span> <span class="n">envid</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">value</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">srcva</span><span class="p">,</span> <span class="kt">unsigned</span> <span class="n">perm</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="c1">// LAB 4: Your code here.</span>
+  <span class="kt">int</span> <span class="n">r</span><span class="p">;</span>
+  <span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span> <span class="n">dstenv</span><span class="p">;</span>
+  <span class="kt">pte_t</span> <span class="o">*</span> <span class="n">pte</span><span class="p">;</span>
+  <span class="k">struct</span> <span class="n">PageInfo</span> <span class="o">*</span><span class="n">pp</span><span class="p">;</span>
+  <span class="c1">// Check parameters</span>
+  <span class="c1">// Check envid and env status</span>
+  <span class="n">r</span> <span class="o">=</span> <span class="n">envid2env</span><span class="p">(</span><span class="n">envid</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">dstenv</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> 
+    <span class="k">return</span> <span class="o">-</span><span class="n">E_BAD_ENV</span><span class="p">;</span>
+  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">dstenv</span><span class="o">-&gt;</span><span class="n">env_ipc_recving</span><span class="p">)</span>
+    <span class="k">return</span> <span class="o">-</span><span class="n">E_IPC_NOT_RECV</span><span class="p">;</span>
+
+  <span class="c1">// Check srcva and perm. notice : if srcva &gt;= UTOP, do nothing.</span>
+  <span class="k">if</span> <span class="p">((</span><span class="kt">uintptr_t</span><span class="p">)</span><span class="n">srcva</span> <span class="o">&lt;</span> <span class="n">UTOP</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">PGOFF</span><span class="p">(</span><span class="n">srcva</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span>
+      <span class="k">return</span>  <span class="o">-</span><span class="n">E_INVAL</span><span class="p">;</span>
+
+    <span class="k">if</span> <span class="p">((</span><span class="n">perm</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">PTE_U</span> <span class="o">|</span> <span class="n">PTE_P</span><span class="p">))</span> <span class="o">!=</span> <span class="p">(</span><span class="n">PTE_U</span> <span class="o">|</span> <span class="n">PTE_P</span><span class="p">))</span> 
+      <span class="k">return</span> <span class="o">-</span><span class="n">E_INVAL</span><span class="p">;</span>
+
+    <span class="k">if</span> <span class="p">(((</span><span class="n">perm</span> <span class="o">|</span> <span class="n">PTE_SYSCALL</span><span class="p">)</span> <span class="o">!=</span> <span class="n">PTE_SYSCALL</span><span class="p">))</span>
+      <span class="k">return</span> <span class="o">-</span><span class="n">E_INVAL</span><span class="p">;</span>
+
+    <span class="c1">// Check physical page exist</span>
+    <span class="n">pp</span> <span class="o">=</span> <span class="n">page_lookup</span><span class="p">(</span><span class="n">curenv</span><span class="o">-&gt;</span><span class="n">env_pgdir</span><span class="p">,</span> <span class="n">srcva</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">pte</span><span class="p">);</span>
+    <span class="k">if</span> <span class="p">((</span><span class="kt">uintptr_t</span><span class="p">)</span><span class="n">srcva</span> <span class="o">&lt;</span> <span class="n">UTOP</span> <span class="o">&amp;&amp;</span> <span class="o">!</span><span class="n">pp</span><span class="p">)</span>
+      <span class="k">return</span> <span class="o">-</span><span class="n">E_INVAL</span><span class="p">;</span>
+
+    <span class="c1">// Check perm write conflict</span>
+    <span class="k">if</span> <span class="p">((</span><span class="n">perm</span> <span class="o">&amp;</span> <span class="n">PTE_W</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="o">!</span><span class="p">(</span><span class="o">*</span><span class="n">pte</span> <span class="o">&amp;</span> <span class="n">PTE_W</span><span class="p">))</span>
+      <span class="k">return</span> <span class="o">-</span><span class="n">E_INVAL</span><span class="p">;</span>
+
+    <span class="c1">// Send mapping </span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">dstenv</span><span class="o">-&gt;</span><span class="n">env_ipc_dstva</span><span class="p">)</span> <span class="p">{</span>
+      <span class="c1">// Do page map</span>
+      <span class="n">r</span> <span class="o">=</span> <span class="n">page_insert</span><span class="p">(</span><span class="n">dstenv</span><span class="o">-&gt;</span><span class="n">env_pgdir</span><span class="p">,</span> <span class="n">pp</span><span class="p">,</span> <span class="n">dstenv</span><span class="o">-&gt;</span><span class="n">env_ipc_dstva</span><span class="p">,</span> <span class="n">perm</span><span class="p">);</span>
+      <span class="k">if</span> <span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="k">return</span> <span class="o">-</span><span class="n">E_NO_MEM</span><span class="p">;</span>
+      <span class="c1">// Make page perm</span>
+      <span class="n">dstenv</span><span class="o">-&gt;</span><span class="n">env_ipc_perm</span> <span class="o">=</span> <span class="n">perm</span><span class="p">;</span>
+    <span class="p">}</span>
+  <span class="p">}</span>
+
+  <span class="c1">// If srcva &gt;= UTOP, no mapping transfered and no errors.</span>
+
+  <span class="n">dstenv</span><span class="o">-&gt;</span><span class="n">env_ipc_recving</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+  <span class="n">dstenv</span><span class="o">-&gt;</span><span class="n">env_ipc_value</span> <span class="o">=</span> <span class="n">value</span><span class="p">;</span>
+  <span class="n">dstenv</span><span class="o">-&gt;</span><span class="n">env_ipc_from</span> <span class="o">=</span> <span class="n">curenv</span><span class="o">-&gt;</span><span class="n">env_id</span><span class="p">;</span>
+  <span class="n">dstenv</span><span class="o">-&gt;</span><span class="n">env_status</span> <span class="o">=</span> <span class="n">ENV_RUNNABLE</span><span class="p">;</span>
+
+  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<p><strong>lib 库对ipc的包装</strong> <br />
+<strong>ipc_recv</strong> : 如果不需要page mapping，那么在系统调用的时候，<code>dstva</code>传递<code>UTOP</code>。</p>
+<div class="highlight"><pre><span class="c1">// Receive a value via IPC and return it.</span>
+<span class="c1">// If &#39;pg&#39; is nonnull, then any page sent by the sender will be mapped at</span>
+<span class="c1">//  that address.</span>
+<span class="c1">// If &#39;from_env_store&#39; is nonnull, then store the IPC sender&#39;s envid in</span>
+<span class="c1">//  *from_env_store.</span>
+<span class="c1">// If &#39;perm_store&#39; is nonnull, then store the IPC sender&#39;s page permission</span>
+<span class="c1">//  in *perm_store (this is nonzero iff a page was successfully</span>
+<span class="c1">//  transferred to &#39;pg&#39;).</span>
+<span class="c1">// If the system call fails, then store 0 in *fromenv and *perm (if</span>
+<span class="c1">//  they&#39;re nonnull) and return the error.</span>
+<span class="c1">// Otherwise, return the value sent by the sender</span>
+<span class="c1">//</span>
+<span class="c1">// Hint:</span>
+<span class="c1">//   Use &#39;thisenv&#39; to discover the value and who sent it.</span>
+<span class="c1">//   If &#39;pg&#39; is null, pass sys_ipc_recv a value that it will understand</span>
+<span class="c1">//   as meaning &quot;no page&quot;.  (Zero is not the right value, since that&#39;s</span>
+<span class="c1">//   a perfectly valid place to map a page.)</span>
+<span class="kt">int32_t</span>
+<span class="nf">ipc_recv</span><span class="p">(</span><span class="kt">envid_t</span> <span class="o">*</span><span class="n">from_env_store</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">pg</span><span class="p">,</span> <span class="kt">int</span> <span class="o">*</span><span class="n">perm_store</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="c1">// LAB 4: Your code here.</span>
+  <span class="kt">int</span> <span class="n">r</span><span class="p">;</span>
+  <span class="c1">// Send recv system call</span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">pg</span><span class="p">)</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="n">sys_ipc_recv</span><span class="p">(</span><span class="n">pg</span><span class="p">);</span>
+  <span class="k">else</span> 
+    <span class="n">r</span> <span class="o">=</span> <span class="n">sys_ipc_recv</span><span class="p">((</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span><span class="n">UTOP</span><span class="p">);</span>
+
+  <span class="k">if</span> <span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">from_env_store</span><span class="p">)</span>
+      <span class="o">*</span><span class="n">from_env_store</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">perm_store</span><span class="p">)</span>
+      <span class="o">*</span><span class="n">perm_store</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="k">return</span> <span class="n">r</span><span class="p">;</span>
+  <span class="p">}</span>
+
+  <span class="c1">// At this time, thisenv is blocked, waiting for an env to send msg to</span>
+  <span class="c1">// it and change ENV_STATUS. So it can be scheduled.</span>
+
+  <span class="k">if</span> <span class="p">(</span><span class="n">from_env_store</span><span class="p">)</span>
+    <span class="o">*</span><span class="n">from_env_store</span> <span class="o">=</span> <span class="n">thisenv</span><span class="o">-&gt;</span><span class="n">env_ipc_from</span><span class="p">;</span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">perm_store</span><span class="p">)</span>
+    <span class="o">*</span><span class="n">perm_store</span> <span class="o">=</span> <span class="n">thisenv</span><span class="o">-&gt;</span><span class="n">env_ipc_perm</span><span class="p">;</span>
+
+  <span class="k">return</span> <span class="n">thisenv</span><span class="o">-&gt;</span><span class="n">env_ipc_value</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<p><strong>ipc_send</strong> : 如果返回<code>-E_IPC_NOT_RECV</code>，表示接受消息的进程还没有<code>struct Env</code>中的<code>env_ipc_recving</code>，需要继续try。</p>
+<div class="highlight"><pre><span class="c1">// Send &#39;val&#39; (and &#39;pg&#39; with &#39;perm&#39;, if &#39;pg&#39; is nonnull) to &#39;toenv&#39;.</span>
+<span class="c1">// This function keeps trying until it succeeds.</span>
+<span class="c1">// It should panic() on any error other than -E_IPC_NOT_RECV.</span>
+<span class="c1">//</span>
+<span class="c1">// Hint:</span>
+<span class="c1">//   Use sys_yield() to be CPU-friendly.</span>
+<span class="c1">//   If &#39;pg&#39; is null, pass sys_ipc_recv a value that it will understand</span>
+<span class="c1">//   as meaning &quot;no page&quot;.  (Zero is not the right value.)</span>
+<span class="kt">void</span>
+<span class="nf">ipc_send</span><span class="p">(</span><span class="kt">envid_t</span> <span class="n">to_env</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">val</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">pg</span><span class="p">,</span> <span class="kt">int</span> <span class="n">perm</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="c1">// LAB 4: Your code here.</span>
+  <span class="kt">int</span> <span class="n">r</span> <span class="o">=</span> <span class="o">-</span><span class="n">E_IPC_NOT_RECV</span><span class="p">;</span>
+  <span class="k">while</span><span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">){</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">r</span> <span class="o">!=</span> <span class="o">-</span><span class="n">E_IPC_NOT_RECV</span><span class="p">)</span>
+      <span class="n">panic</span><span class="p">(</span><span class="s">&quot;ipc_send : sys_ipc_try_send error : %e.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="n">r</span> <span class="p">);</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">pg</span><span class="p">)</span>
+      <span class="n">r</span> <span class="o">=</span> <span class="n">sys_ipc_try_send</span><span class="p">(</span><span class="n">to_env</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">pg</span><span class="p">,</span> <span class="n">perm</span><span class="p">);</span>
+    <span class="k">else</span> 
+      <span class="n">r</span> <span class="o">=</span> <span class="n">sys_ipc_try_send</span><span class="p">(</span><span class="n">to_env</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span><span class="n">UTOP</span><span class="p">,</span> <span class="n">perm</span><span class="p">);</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<p>-- EOF --</p>
+            </div>
+            <!-- /.entry-content -->
+        </article>
+    </section>
+
+        </div>
+    </div>
+</div>
+<footer>
+   <div class="container">
+      <hr>
+      <div class="row">
+         <div class="col-xs-10">&copy; 2013 zorksylar
+            &middot; Powered by <a href="https://github.com/DandyDev/pelican-bootstrap3" target="_blank">pelican-bootstrap3</a>,
+            <a href="http://docs.getpelican.com/" target="_blank">Pelican</a>,
+            <a href="http://getbootstrap.com" target="_blank">Bootstrap</a>         </div>
+         <div class="col-xs-2"><p class="pull-right"><i class="fa fa-arrow-up"></i> <a href="#">Back to top</a></p></div>
+      </div>
+   </div>
+</footer>
+<script src="http://zorksylar.github.io/theme/js/jquery.min.js"></script>
+
+<!-- Include all compiled plugins (below), or include individual files as needed -->
+<script src="http://zorksylar.github.io/theme/js/bootstrap.min.js"></script>
+
+<!-- Enable responsive features in IE8 with Respond.js (https://github.com/scottjehl/Respond) -->
+<script src="http://zorksylar.github.io/theme/js/respond.min.js"></script>
+
+
+</body>
+</html>
