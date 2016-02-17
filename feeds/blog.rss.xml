@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Z's Thoughts</title><link>http://zorksylar.github.io/</link><description></description><atom:link href="http://zorksylar.github.io/feeds/blog.rss.xml" rel="self"></atom:link><lastBuildDate>Sun, 08 Sep 2013 00:00:00 +0800</lastBuildDate><item><title>6.828 Lab4 PartC 小结</title><link>http://zorksylar.github.io/6.828-lab4-c-writeup.html</link><description>&lt;h3&gt;Preemptive Multitasking and Inter-Process communication&lt;/h3&gt;
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Z's Thoughts</title><link>http://zorksylar.github.io/</link><description></description><atom:link href="http://zorksylar.github.io/feeds/blog.rss.xml" rel="self"></atom:link><lastBuildDate>Wed, 17 Feb 2016 00:00:00 +0800</lastBuildDate><item><title>利用eventfd实现多线程之间的event polling</title><link>http://zorksylar.github.io/epoll-eventfd.html</link><description>&lt;h3&gt;一个多线程之间同步的模型&lt;/h3&gt;
+&lt;p&gt;很多时候，我们需要实现这样一个单机多线程之间的同步模型：有W个Worker，每个worker之间通过收发消息进行数据同步，我们称worker中收发消息的部分叫做Coordinator。每个Coordinator内部包括Receiver和Sender。Receiver负责接受W个Coordinator发送的消息，每接受到一个消息之后，出发一个event，执行用户定义的event_handler，worker会根据event做相应的计算。Sender负责向每个Coordinator发送消息。Receiver需要poll各个Sender发送来的消息。&lt;/p&gt;
+&lt;p&gt;这个模型在场景下都回用到，比如说要实现user space 的network protocol；比如把NUMA看作是分布式环境，每颗CPU看作是一个server，CPU之间通过收发消息通信(GraM: Scaling Graph Computation to the Trillions的做法)。&lt;/p&gt;
+&lt;h3&gt;eventfd vs condition variable&lt;/h3&gt;
+&lt;p&gt;pthread 中提供了condition variable，局限在于只能做1对1的同步，一个线程等待另外一个线程的signal，无法做到上述模型中的一个线程poll其他多个线程发送来的event。&lt;/p&gt;
+&lt;p&gt;eventfd是linux kernel在 2.6.22 之后提供的一个用于实现线程之间等待/通知的机制。&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="cp"&gt;#include &amp;lt;sys/eventfd.h&amp;gt;&lt;/span&gt;
+&lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="nf"&gt;eventfd&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;unsigned&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;initval&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;flags&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;eventfd创建了一个fd(file descriptor),这个fd内部维护了一个&lt;code&gt;uint64_t&lt;/code&gt;类型的计数器，这个process可以read/write这个fd，在&lt;code&gt;write(int fd, uint64_t val, ssize_t bytes)&lt;/code&gt;时，会使内部计数器加给定的&lt;code&gt;val&lt;/code&gt;；在&lt;code&gt;read&lt;/code&gt;时，如果counter非0,如果eventfd初始化的flags设置了&lt;code&gt;EFD_SEMAPHORE&lt;/code&gt;，则会返回1，同时计数减1；若未设置&lt;code&gt;EFD_SEMAPHORE&lt;/code&gt;,则直接返回计数器值，同时计数器清零。eventfd支持epoll等polling操作。
+&lt;a href="http://man7.org/linux/man-pages/man2/eventfd.2.html"&gt;eventfd的更多信息&lt;/a&gt;&lt;/p&gt;
+&lt;h3&gt;Implementation&lt;/h3&gt;
+&lt;p&gt;上述多线程同步模型可以通过eventfd + epoll来实现。每个Receiver创建W个eventfd，每个Sender读取对应的eventfd. Sender通过写入eventfd来signal Receiver。 Receiver注册eventfd，通过epoll来监听事件。&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/zorksylar/ZLab/tree/master/eventfd"&gt;Code is here&lt;/a&gt; Run : &lt;code&gt;make&lt;/code&gt; , &lt;code&gt;./main&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;-- EOF --&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">zorksylar</dc:creator><pubDate>Wed, 17 Feb 2016 00:00:00 +0800</pubDate><guid>tag:zorksylar.github.io,2016-02-17:epoll-eventfd.html</guid><category>[eventfd</category><category>parallel]</category></item><item><title>6.828 Lab4 PartC 小结</title><link>http://zorksylar.github.io/6.828-lab4-c-writeup.html</link><description>&lt;h3&gt;Preemptive Multitasking and Inter-Process communication&lt;/h3&gt;
 &lt;p&gt;PartC 任务是实现一个抢占式的多任务处理和进程间通信。
 Concepts: &lt;code&gt;interrupt&lt;/code&gt;, &lt;code&gt;ipc&lt;/code&gt;, &lt;code&gt;preemptive_multitasking&lt;/code&gt;.&lt;/p&gt;
 &lt;h3&gt;Exercise 13,14&lt;/h3&gt;

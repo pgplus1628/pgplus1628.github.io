@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en" prefix="og: http://ogp.me/ns# fb: https://www.facebook.com/2008/fbml">
+<head>
+    <title>利用eventfd实现多线程之间的event polling - Z's Thoughts</title>
+    <!-- Using the latest rendering mode for IE -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+
+
+<link rel="canonical" href="http://zorksylar.github.io/epoll-eventfd.html">
+
+        <meta name="author" content="zorksylar" />
+        <meta name="keywords" content="[eventfd,parallel]" />
+        <meta name="description" content="eventfd + epoll 实现的多线程之间event polling" />
+
+        <meta property="og:site_name" content="Z's Thoughts" />
+        <meta property="og:type" content="article"/>
+        <meta property="og:title" content="利用eventfd实现多线程之间的event polling"/>
+        <meta property="og:url" content="http://zorksylar.github.io/epoll-eventfd.html"/>
+        <meta property="og:description" content="eventfd + epoll 实现的多线程之间event polling"/>
+        <meta property="article:published_time" content="2016-02-17" />
+            <meta property="article:section" content="Blog" />
+            <meta property="article:tag" content="[eventfd" />
+            <meta property="article:tag" content="parallel]" />
+            <meta property="article:author" content="zorksylar" />
+
+
+
+    <!-- Bootstrap -->
+        <link rel="stylesheet" href="http://zorksylar.github.io/theme/css/bootstrap.min.css" type="text/css"/>
+    <link href="http://zorksylar.github.io/theme/css/font-awesome.min.css" rel="stylesheet">
+
+    <link href="http://zorksylar.github.io/theme/css/pygments/manni.css" rel="stylesheet">
+    <link rel="stylesheet" href="http://zorksylar.github.io/theme/css/style.css" type="text/css"/>
+
+        <link href="http://zorksylar.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate"
+              title="Z's Thoughts ATOM Feed"/>
+
+
+
+        <link href="http://zorksylar.github.io/feeds/blog.atom.xml" type="application/atom+xml" rel="alternate"
+              title="Z's Thoughts Blog ATOM Feed"/>
+
+</head>
+<body>
+
+<div class="navbar navbar-default navbar-fixed-top" role="navigation">
+	<div class="container">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a href="http://zorksylar.github.io/" class="navbar-brand">
+Z's Thoughts            </a>
+        </div>
+        <div class="collapse navbar-collapse navbar-ex1-collapse">
+            <ul class="nav navbar-nav">
+                         <li><a href="http://zorksylar.github.io/">
+                             Home
+                          </a></li>
+                        <li class="active">
+                            <a href="http://zorksylar.github.io/category/blog.html">Blog</a>
+                        </li>
+            </ul>
+            <ul class="nav navbar-nav navbar-right">
+              <li><a href="http://zorksylar.github.io/archives.html"><i class="fa fa-th-list"></i><span class="icon-label">Archives</span></a></li>
+            </ul>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+</div> <!-- /.navbar -->
+<!-- Banner -->
+<!-- End Banner -->
+<div class="container">
+    <div class="row">
+        <div class="col-lg-12">
+    <section id="content">
+        <article>
+            <header class="page-header">
+                <h1>
+                    <a href="http://zorksylar.github.io/epoll-eventfd.html"
+                       rel="bookmark"
+                       title="Permalink to 利用eventfd实现多线程之间的event polling">
+                        利用eventfd实现多线程之间的event polling
+                    </a>
+                </h1>
+            </header>
+            <div class="entry-content">
+                <div class="panel">
+                    <div class="panel-body">
+<footer class="post-info">
+    <span class="label label-default">Date</span>
+    <span class="published">
+        <i class="fa fa-calendar"></i><time datetime="2016-02-17T00:00:00+08:00"> Wed 17 February 2016</time>
+    </span>
+
+
+
+
+
+<span class="label label-default">Tags</span>
+	<a href="http://zorksylar.github.io/tag/eventfd.html">[eventfd</a>
+        /
+	<a href="http://zorksylar.github.io/tag/parallel.html">parallel]</a>
+    
+</footer><!-- /.post-info -->                    </div>
+                </div>
+                <h3>一个多线程之间同步的模型</h3>
+<p>很多时候，我们需要实现这样一个单机多线程之间的同步模型：有W个Worker，每个worker之间通过收发消息进行数据同步，我们称worker中收发消息的部分叫做Coordinator。每个Coordinator内部包括Receiver和Sender。Receiver负责接受W个Coordinator发送的消息，每接受到一个消息之后，出发一个event，执行用户定义的event_handler，worker会根据event做相应的计算。Sender负责向每个Coordinator发送消息。Receiver需要poll各个Sender发送来的消息。</p>
+<p>这个模型在场景下都回用到，比如说要实现user space 的network protocol；比如把NUMA看作是分布式环境，每颗CPU看作是一个server，CPU之间通过收发消息通信(GraM: Scaling Graph Computation to the Trillions的做法)。</p>
+<h3>eventfd vs condition variable</h3>
+<p>pthread 中提供了condition variable，局限在于只能做1对1的同步，一个线程等待另外一个线程的signal，无法做到上述模型中的一个线程poll其他多个线程发送来的event。</p>
+<p>eventfd是linux kernel在 2.6.22 之后提供的一个用于实现线程之间等待/通知的机制。</p>
+<div class="highlight"><pre><span class="cp">#include &lt;sys/eventfd.h&gt;</span>
+<span class="kt">int</span> <span class="nf">eventfd</span><span class="p">(</span><span class="kt">unsigned</span> <span class="kt">int</span> <span class="n">initval</span><span class="p">,</span> <span class="kt">int</span> <span class="n">flags</span><span class="p">);</span>
+</pre></div>
+
+
+<p>eventfd创建了一个fd(file descriptor),这个fd内部维护了一个<code>uint64_t</code>类型的计数器，这个process可以read/write这个fd，在<code>write(int fd, uint64_t val, ssize_t bytes)</code>时，会使内部计数器加给定的<code>val</code>；在<code>read</code>时，如果counter非0,如果eventfd初始化的flags设置了<code>EFD_SEMAPHORE</code>，则会返回1，同时计数减1；若未设置<code>EFD_SEMAPHORE</code>,则直接返回计数器值，同时计数器清零。eventfd支持epoll等polling操作。
+<a href="http://man7.org/linux/man-pages/man2/eventfd.2.html">eventfd的更多信息</a></p>
+<h3>Implementation</h3>
+<p>上述多线程同步模型可以通过eventfd + epoll来实现。每个Receiver创建W个eventfd，每个Sender读取对应的eventfd. Sender通过写入eventfd来signal Receiver。 Receiver注册eventfd，通过epoll来监听事件。</p>
+<p><a href="https://github.com/zorksylar/ZLab/tree/master/eventfd">Code is here</a> Run : <code>make</code> , <code>./main</code>.</p>
+<p>-- EOF --</p>
+            </div>
+            <!-- /.entry-content -->
+    <hr/>
+    <section class="comments" id="comments">
+        <h2>Comments</h2>
+
+        <div id="disqus_thread"></div>
+        <script type="text/javascript">
+            /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+            var disqus_shortname = 'zorkblog'; // required: replace example with your forum shortname
+
+                    var disqus_identifier = 'epoll-eventfd';
+                var disqus_url = 'http://zorksylar.github.io/epoll-eventfd.html';
+
+            var disqus_config = function () {
+                this.language = "en";
+            };
+
+            /* * * DON'T EDIT BELOW THIS LINE * * */
+            (function () {
+                var dsq = document.createElement('script');
+                dsq.type = 'text/javascript';
+                dsq.async = true;
+                dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+                (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+            })();
+        </script>
+        <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+            Disqus.</a></noscript>
+        <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    </section>
+        </article>
+    </section>
+
+        </div>
+    </div>
+</div>
+<footer>
+   <div class="container">
+      <hr>
+      <div class="row">
+         <!--
+         -->
+         <div class="col-xs-10">&copy; 2016 zorksylar
+            <!--
+            &middot; Powered by <a href="https://github.com/DandyDev/pelican-bootstrap3" target="_blank">pelican-bootstrap3</a>,
+            <a href="http://docs.getpelican.com/" target="_blank">Pelican</a>,
+            <a href="http://getbootstrap.com" target="_blank">Bootstrap</a>
+            -->         </div>
+         <div class="col-xs-2"><p class="pull-right"><i class="fa fa-arrow-up"></i> <a href="#">Back to top</a></p></div>
+      </div>
+   </div>
+</footer>
+<script src="http://zorksylar.github.io/theme/js/jquery.min.js"></script>
+
+<!-- Include all compiled plugins (below), or include individual files as needed -->
+<script src="http://zorksylar.github.io/theme/js/bootstrap.min.js"></script>
+
+<!-- Enable responsive features in IE8 with Respond.js (https://github.com/scottjehl/Respond) -->
+<script src="http://zorksylar.github.io/theme/js/respond.min.js"></script>
+
+    <!-- Disqus -->
+    <script type="text/javascript">
+        /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+        var disqus_shortname = 'zorkblog'; // required: replace example with your forum shortname
+
+        /* * * DON'T EDIT BELOW THIS LINE * * */
+        (function () {
+            var s = document.createElement('script');
+            s.async = true;
+            s.type = 'text/javascript';
+            s.src = '//' + disqus_shortname + '.disqus.com/count.js';
+            (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+        }());
+    </script>
+    <!-- End Disqus Code -->
+    <!-- Google Analytics -->
+    <script type="text/javascript">
+
+        var _gaq = _gaq || [];
+        _gaq.push(['_setAccount', 'UA-40862585-2']);
+        _gaq.push(['_trackPageview']);
+
+        (function () {
+            var ga = document.createElement('script');
+            ga.type = 'text/javascript';
+            ga.async = true;
+            ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(ga, s);
+        })();
+    </script>
+    <!-- End Google Analytics Code -->
+
+</body>
+</html>
