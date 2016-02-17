@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" prefix="og: http://ogp.me/ns# fb: https://www.facebook.com/2008/fbml">
 <head>
-    <title>利用eventfd + epoll 实现单机event polling - Z's Thoughts</title>
+    <title>Implementing Event Polling in Multi-Thread Environment with eventfd and epoll - Z's Thoughts</title>
     <!-- Using the latest rendering mode for IE -->
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta charset="utf-8">
@@ -16,7 +16,7 @@
 
         <meta property="og:site_name" content="Z's Thoughts" />
         <meta property="og:type" content="article"/>
-        <meta property="og:title" content="利用eventfd + epoll 实现单机event polling"/>
+        <meta property="og:title" content="Implementing Event Polling in Multi-Thread Environment with eventfd and epoll"/>
         <meta property="og:url" content="http://zorksylar.github.io/epoll-eventfd.html"/>
         <meta property="og:description" content=""/>
         <meta property="article:published_time" content="2016-02-17" />
@@ -84,8 +84,8 @@ Z's Thoughts            </a>
                 <h1>
                     <a href="http://zorksylar.github.io/epoll-eventfd.html"
                        rel="bookmark"
-                       title="Permalink to 利用eventfd + epoll 实现单机event polling">
-                        利用eventfd + epoll 实现单机event polling
+                       title="Permalink to Implementing Event Polling in Multi-Thread Environment with eventfd and epoll">
+                        Implementing Event Polling in Multi-Thread Environment with eventfd and epoll
                     </a>
                 </h1>
             </header>
@@ -109,23 +109,256 @@ Z's Thoughts            </a>
     
 </footer><!-- /.post-info -->                    </div>
                 </div>
-                <h3>一个多线程之间同步的模型</h3>
-<p>很多时候，我们需要实现这样一个单机多线程之间的同步模型：有W个Worker，每个worker之间通过收发消息进行数据同步，我们称worker中收发消息的部分叫做Coordinator。每个Coordinator内部包括Receiver和Sender。Receiver负责接受W个Coordinator发送的消息，每接受到一个消息之后，出发一个event，执行用户定义的event_handler，worker会根据event做相应的计算。Sender负责向每个Coordinator发送消息。Receiver需要poll各个Sender发送来的消息。</p>
-<p>这个模型在场景下都回用到，比如说要实现user space 的network protocol；比如把NUMA看作是分布式环境，每颗CPU看作是一个server，CPU之间通过收发消息通信(GraM: Scaling Graph Computation to the Trillions的做法)。</p>
-<h3>eventfd vs condition variable</h3>
-<p>pthread 中提供了condition variable，局限在于只能做1对1的同步，一个线程等待另外一个线程的signal，无法做到上述模型中的一个线程poll其他多个线程发送来的event。</p>
-<p>eventfd是linux kernel在 2.6.22 之后提供的一个用于实现线程之间等待/通知的机制。</p>
+                <h3>Poll/Notify Thread Synchronization Model in Multi-Thread Environment</h3>
+<p>In most cases, we need to implement thread synchronization mechanism in the following manner: There are <em>W</em> <strong>Workers</strong>, and each worker communicates with each other through message passing. There is a <strong>Coordinator</strong> in each <strong>Worker</strong>, which is in charge of message sending and dispatching. Specifically, <strong>Sender</strong> and <strong>Receiver</strong> in Coordinator are for message sending and receiving. When one message arrived, Receiver should trigger an event according to the content of this message, and pass this event to <strong>Worker</strong> to do some user defined event handling.</p>
+<p>Each Receiver maintains a <strong>channel</strong>(message buffer) for each Sender. There are <em>W</em> Workers, and there should be <em>W</em> channels for each Receiver. In the Receiver side, a listening-thread is needed to poll on these channels. Mostly, we do not want to waste CPU cycles on the listening-thread. We need a <strong>Poll/Notify</strong> mechanism to wake up the listening thread in Receiver when a channel is ready to read. I.E, when there is no channel available, the listening-thread should be blocked.</p>
+<p>This model is useful in many cases, such as user-space network protocol implementation, and message passing between NUMA nodes(like this paper :<em>GraM: Scaling Graph Computation to the Trillions</em> does).</p>
+<h3>conditional variable V.S. eventfd V.S. sockets</h3>
+<p><code>pthread</code> provides <code>conditional wait</code> mechanism. Thread A wait for some event, and thread B can notify the threads that waiting on the event. This is the <strong>Wait/Notify</strong> thread synchronization. One thread wait and the other thread notify. The limitation of <code>conditional wait</code> is one thread can not wait on multiple condition variables.</p>
+<p><code>eventfd</code> is introduced in Linux kernel after version 2.6.22.</p>
 <div class="highlight"><pre><span class="cp">#include &lt;sys/eventfd.h&gt;</span>
 <span class="kt">int</span> <span class="nf">eventfd</span><span class="p">(</span><span class="kt">unsigned</span> <span class="kt">int</span> <span class="n">initval</span><span class="p">,</span> <span class="kt">int</span> <span class="n">flags</span><span class="p">);</span>
 </pre></div>
 
 
-<p>eventfd创建了一个fd(file descriptor),这个fd内部维护了一个<code>uint64_t</code>类型的计数器，这个process可以read/write这个fd，在<code>write(int fd, uint64_t val, ssize_t bytes)</code>时，会使内部计数器加给定的<code>val</code>；在<code>read</code>时，如果counter非0,如果eventfd初始化的flags设置了<code>EFD_SEMAPHORE</code>，则会返回1，同时计数减1；若未设置<code>EFD_SEMAPHORE</code>,则直接返回计数器值，同时计数器清零。eventfd支持epoll等polling操作。
-<a href="http://man7.org/linux/man-pages/man2/eventfd.2.html">eventfd的更多信息</a></p>
-<h3>Implementation</h3>
-<p>上述多线程同步模型可以通过eventfd + epoll来实现。每个Receiver创建W个eventfd，每个Sender读取对应的eventfd. Sender通过写入eventfd来signal Receiver。 Receiver注册eventfd，通过epoll来监听事件。</p>
-<p><a href="https://github.com/zorksylar/ZLab/tree/master/eventfd">Code is here</a> Run : <code>make</code> , <code>./main</code>.</p>
-<p>-- EOF --</p>
+<blockquote>
+<p>eventfd() creates an "eventfd object" that can be used as an event wait/notify mechanism by user-space applications, and by the kernel to notify user-space applications of events.  The object contains an unsigned 64-bit integer (uint64_t) counter that is maintained by the kernel. This counter is initialized with the value specified in the argument initval.</p>
+</blockquote>
+<p><code>eventfd</code> will create an file descriptor for event notification. The file descriptor can be used in <code>epoll/read/write</code> calls.</p>
+<p>More information can be found in the <a href="http://man7.org/linux/man-pages/man2/eventfd.2.html">man page</a>.</p>
+<p><code>Socket</code> is used for communication in distributed environment, which would bring the overhead of network communication stack in our case.</p>
+<h3>Poll/Notify Implementation with eventfd and epoll</h3>
+<p>The Poll/Notify mechanism can be implemented with eventfd and epoll. For the Receiver, it only needs to create an eventfd for each channel, and add them to  epoll file descriptor. The listening thread <code>epoll_wait</code> on the epoll file descriptor.</p>
+<p>These codes can be found in <a href="https://github.com/zorksylar/ZLab/tree/master/eventfd">Github</a></p>
+<p>The Coordinator Implmentation :</p>
+<div class="highlight"><pre><span class="c1">//</span>
+<span class="c1">// Created by zorksylar on 2/16/16.</span>
+<span class="c1">//</span>
+
+<span class="cp">#pragma once</span>
+
+<span class="cp">#include &lt;unistd.h&gt;</span>
+<span class="cp">#include &lt;pthread.h&gt;</span>
+<span class="cp">#include &lt;sys/time.h&gt;</span>
+<span class="cp">#include &lt;sys/eventfd.h&gt;</span>
+<span class="cp">#include &lt;sys/epoll.h&gt;</span>
+<span class="cp">#include &lt;glog/logging.h&gt;</span>
+<span class="cp">#include &lt;errno.h&gt;</span>
+<span class="cp">#include &lt;stdint.h&gt;</span>
+
+
+<span class="cp">#define EPOLL_WAIT_TIMEOUT (1000) </span><span class="c1">// 1.0 second</span>
+
+<span class="k">class</span> <span class="nc">Receiver</span><span class="p">;</span>
+
+<span class="k">struct</span> <span class="n">RXArgs</span> <span class="p">{</span>
+    <span class="n">Receiver</span> <span class="o">*</span> <span class="n">rx</span><span class="p">;</span>
+<span class="p">};</span>
+
+
+<span class="k">class</span> <span class="nc">Receiver</span> <span class="p">{</span>
+<span class="k">private</span> <span class="o">:</span>
+    <span class="kt">int</span> <span class="n">kclient_</span><span class="p">;</span>
+    <span class="kt">int</span> <span class="n">id_</span><span class="p">;</span>
+
+<span class="k">public</span> <span class="o">:</span>
+    <span class="kt">int</span> <span class="o">*</span> <span class="n">chan_fds</span><span class="p">;</span> <span class="c1">// event fds of this channel</span>
+    <span class="kt">pthread_t</span> <span class="n">listener</span><span class="p">;</span>
+
+    <span class="n">Receiver</span><span class="p">(</span><span class="kt">int</span> <span class="n">kclients</span><span class="p">,</span> <span class="kt">int</span> <span class="n">id</span><span class="p">)</span> <span class="o">:</span> <span class="n">kclient_</span><span class="p">(</span><span class="n">kclients</span><span class="p">),</span> <span class="n">id_</span><span class="p">(</span><span class="n">id</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">chan_fds</span> <span class="o">=</span> <span class="k">new</span> <span class="kt">int</span> <span class="p">[</span><span class="n">kclient_</span><span class="p">];</span>
+        <span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span><span class="n">i</span> <span class="o">&lt;</span> <span class="n">kclient_</span><span class="p">;</span><span class="n">i</span> <span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">chan_fds</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">eventfd</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">EFD_NONBLOCK</span><span class="p">);</span>
+            <span class="n">CHECK_NE</span><span class="p">(</span><span class="n">chan_fds</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="s">&quot; Create eventfd for channel &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">i</span> <span class="o">&lt;&lt;</span> <span class="s">&quot; failed.&quot;</span><span class="p">;</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="c1">// TODO</span>
+    <span class="kt">void</span> <span class="n">register_read_handler</span><span class="p">()</span> <span class="p">{</span> <span class="p">}</span>
+
+    <span class="kt">void</span> <span class="n">listen</span><span class="p">()</span> <span class="p">{</span>
+        <span class="kt">int</span> <span class="n">ret</span><span class="p">;</span>
+
+        <span class="c1">// create epoll event</span>
+        <span class="k">struct</span> <span class="n">epoll_event</span> <span class="n">events</span><span class="p">[</span><span class="n">kclient_</span><span class="p">];</span>
+        <span class="kt">int</span> <span class="n">ep_fd</span> <span class="o">=</span> <span class="n">epoll_create</span><span class="p">(</span><span class="n">kclient_</span><span class="p">);</span>
+        <span class="n">CHECK_GE</span><span class="p">(</span><span class="n">ep_fd</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;RX::epoll_create failed.&quot;</span><span class="p">;</span>
+
+        <span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span><span class="n">i</span> <span class="o">&lt;</span> <span class="n">kclient_</span><span class="p">;</span><span class="n">i</span> <span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">struct</span> <span class="n">epoll_event</span> <span class="n">read_event</span><span class="p">;</span>
+            <span class="kt">int</span> <span class="n">efd</span> <span class="o">=</span> <span class="n">chan_fds</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+            <span class="n">read_event</span><span class="p">.</span><span class="n">events</span> <span class="o">=</span> <span class="n">EPOLLHUP</span> <span class="o">|</span> <span class="n">EPOLLERR</span> <span class="o">|</span> <span class="n">EPOLLIN</span> <span class="o">|</span> <span class="n">EPOLLET</span><span class="p">;</span>
+            <span class="n">read_event</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">u32</span> <span class="o">=</span> <span class="n">i</span><span class="p">;</span> <span class="c1">// store index</span>
+            <span class="n">ret</span> <span class="o">=</span> <span class="n">epoll_ctl</span><span class="p">(</span><span class="n">ep_fd</span><span class="p">,</span> <span class="n">EPOLL_CTL_ADD</span><span class="p">,</span> <span class="n">efd</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">read_event</span><span class="p">);</span>
+            <span class="n">CHECK_GE</span><span class="p">(</span><span class="n">ret</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;RX &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">id_</span> <span class="o">&lt;&lt;</span> <span class="s">&quot; ::epoll_ctl failed.&quot;</span><span class="p">;</span>
+        <span class="p">}</span>
+
+        <span class="n">LOG</span><span class="p">(</span><span class="n">INFO</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;RX &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">id_</span> <span class="o">&lt;&lt;</span> <span class="s">&quot; ::begin listening.&quot;</span><span class="p">;</span>
+        <span class="c1">// while loop</span>
+        <span class="kt">uint64_t</span> <span class="n">val</span><span class="p">;</span>
+        <span class="k">while</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+            <span class="kt">bool</span> <span class="n">ok</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+            <span class="kt">int</span> <span class="n">nfds</span> <span class="o">=</span> <span class="n">epoll_wait</span><span class="p">(</span><span class="n">ep_fd</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">events</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">kclient_</span><span class="p">,</span> <span class="n">EPOLL_WAIT_TIMEOUT</span><span class="p">);</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">nfds</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+                <span class="c1">// handle each ready fd.</span>
+                <span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span><span class="n">i</span> <span class="o">&lt;</span> <span class="n">nfds</span><span class="p">;</span><span class="n">i</span> <span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="kt">int</span> <span class="n">cid</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span><span class="p">(</span><span class="n">events</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">data</span><span class="p">.</span><span class="n">u32</span><span class="p">);</span>
+                    <span class="k">if</span> <span class="p">(</span> <span class="n">events</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">events</span> <span class="o">&amp;</span> <span class="n">EPOLLHUP</span><span class="p">)</span> <span class="p">{</span>
+                        <span class="n">LOG</span><span class="p">(</span><span class="n">ERROR</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;RX &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">id_</span><span class="o">&lt;&lt;</span> <span class="s">&quot; ::epoll eventfd has epoll hup for &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">cid</span><span class="p">;</span>
+                        <span class="n">ok</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+                    <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">events</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">events</span> <span class="o">&amp;</span> <span class="n">EPOLLERR</span><span class="p">)</span> <span class="p">{</span>
+                        <span class="n">LOG</span><span class="p">(</span><span class="n">ERROR</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;RX &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">id_</span> <span class="o">&lt;&lt;</span> <span class="s">&quot; ::epoll eventfd has epoll error for &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">cid</span><span class="p">;</span>
+                        <span class="n">ok</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+                    <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">events</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">events</span> <span class="o">&amp;</span> <span class="n">EPOLLIN</span><span class="p">)</span> <span class="p">{</span>
+                        <span class="kt">int</span> <span class="n">event_fd</span> <span class="o">=</span> <span class="n">chan_fds</span><span class="p">[</span><span class="n">cid</span><span class="p">];</span>
+                        <span class="n">ret</span> <span class="o">=</span> <span class="n">read</span><span class="p">(</span><span class="n">event_fd</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">val</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">val</span><span class="p">));</span>
+                        <span class="n">CHECK_GE</span><span class="p">(</span><span class="n">ret</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;RX&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">id_</span> <span class="o">&lt;&lt;</span> <span class="s">&quot; ::read event_fd failed.&quot;</span><span class="p">;</span>
+                        <span class="c1">// TODO read handler</span>
+                        <span class="n">LOG</span><span class="p">(</span><span class="n">INFO</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;RX&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">id_</span> <span class="o">&lt;&lt;</span> <span class="s">&quot; ::read from &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">cid</span> <span class="o">&lt;&lt;</span> <span class="s">&quot; val &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">val</span> <span class="o">&lt;&lt;</span> <span class="s">&quot; with size &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">ret</span> <span class="o">&lt;&lt;</span> <span class="s">&quot; bytes.&quot;</span><span class="p">;</span>
+                    <span class="p">}</span>
+                    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">ok</span><span class="p">)</span> <span class="p">{</span> <span class="k">break</span><span class="p">;</span> <span class="p">}</span>
+                <span class="p">}</span>
+                <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">ok</span><span class="p">)</span> <span class="p">{</span> <span class="k">break</span><span class="p">;</span> <span class="p">}</span>
+            <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">nfds</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+                <span class="n">LOG</span><span class="p">(</span><span class="n">INFO</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;RX &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">id_</span> <span class="o">&lt;&lt;</span> <span class="s">&quot; ::epoll wait time out.&quot;</span><span class="p">;</span>
+            <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+                <span class="n">LOG</span><span class="p">(</span><span class="n">ERROR</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;RX &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">id_</span> <span class="o">&lt;&lt;</span> <span class="s">&quot; ::epoll wait error.&quot;</span><span class="p">;</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+
+        <span class="n">LOG</span><span class="p">(</span><span class="n">INFO</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;RX &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">id_</span> <span class="o">&lt;&lt;</span> <span class="s">&quot; ::exit listen.&quot;</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="k">static</span> <span class="kt">void</span> <span class="o">*</span> <span class="n">listen_fn</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span> <span class="n">args_</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">struct</span> <span class="n">RXArgs</span> <span class="o">*</span> <span class="n">args</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="k">struct</span> <span class="n">RXArgs</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">args_</span><span class="p">);</span>
+        <span class="n">Receiver</span> <span class="o">*</span> <span class="n">rx</span> <span class="o">=</span> <span class="n">args</span><span class="o">-&gt;</span><span class="n">rx</span><span class="p">;</span>
+        <span class="n">rx</span><span class="o">-&gt;</span><span class="n">listen</span><span class="p">();</span>
+        <span class="n">free</span><span class="p">(</span><span class="n">args</span><span class="p">);</span>
+        <span class="n">pthread_exit</span><span class="p">(</span><span class="nb">NULL</span><span class="p">);</span>
+    <span class="p">}</span>
+
+
+    <span class="kt">void</span> <span class="n">start_listener</span><span class="p">()</span> <span class="p">{</span>
+        <span class="k">struct</span> <span class="n">RXArgs</span> <span class="o">*</span> <span class="n">args</span> <span class="o">=</span> <span class="p">(</span><span class="k">struct</span> <span class="n">RXArgs</span><span class="o">*</span><span class="p">)</span><span class="n">malloc</span><span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="k">struct</span> <span class="n">RXArgs</span><span class="p">));</span>
+        <span class="n">args</span><span class="o">-&gt;</span><span class="n">rx</span> <span class="o">=</span> <span class="k">this</span><span class="p">;</span>
+        <span class="n">pthread_create</span><span class="p">(</span><span class="o">&amp;</span><span class="n">listener</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">,</span> <span class="n">Receiver</span><span class="o">::</span><span class="n">listen_fn</span><span class="p">,</span> <span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span><span class="n">args</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="kt">int</span> <span class="n">get_id</span><span class="p">()</span> <span class="p">{</span> <span class="k">return</span> <span class="n">id_</span><span class="p">;</span> <span class="p">}</span>
+
+    <span class="o">~</span><span class="n">Receiver</span><span class="p">()</span> <span class="p">{</span>
+        <span class="c1">// join listener</span>
+        <span class="n">pthread_join</span><span class="p">(</span><span class="n">listener</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">);</span>
+        <span class="c1">// close fds</span>
+        <span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span><span class="n">i</span> <span class="o">&lt;</span> <span class="n">kclient_</span><span class="p">;</span> <span class="n">i</span> <span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">if</span><span class="p">(</span><span class="n">chan_fds</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span> <span class="n">close</span><span class="p">(</span><span class="n">chan_fds</span><span class="p">[</span><span class="n">i</span><span class="p">]);</span> <span class="n">chan_fds</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">;}</span>
+        <span class="p">}</span>
+        <span class="c1">// free</span>
+        <span class="k">delete</span> <span class="n">chan_fds</span><span class="p">;</span>
+    <span class="p">}</span>
+
+
+<span class="p">};</span>
+
+
+
+<span class="k">class</span> <span class="nc">Sender</span> <span class="p">{</span>
+<span class="k">private</span> <span class="o">:</span>
+    <span class="kt">int</span> <span class="n">kserver_</span><span class="p">;</span>
+    <span class="kt">int</span> <span class="n">id_</span><span class="p">;</span>
+
+<span class="k">public</span> <span class="o">:</span>
+    <span class="kt">int</span> <span class="o">*</span> <span class="n">chan_fds</span><span class="p">;</span> <span class="c1">// channel eventfds, get from Receiver</span>
+
+    <span class="n">Sender</span><span class="p">(</span><span class="kt">int</span> <span class="n">kserver</span><span class="p">,</span> <span class="kt">int</span> <span class="n">id</span><span class="p">,</span> <span class="n">Receiver</span> <span class="o">**</span> <span class="n">servers</span><span class="p">)</span> <span class="o">:</span> <span class="n">kserver_</span><span class="p">(</span><span class="n">kserver</span><span class="p">),</span> <span class="n">id_</span><span class="p">(</span><span class="n">id</span><span class="p">){</span>
+        <span class="n">chan_fds</span> <span class="o">=</span> <span class="k">new</span> <span class="kt">int</span> <span class="p">[</span><span class="n">kserver_</span><span class="p">];</span>
+        <span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span><span class="n">i</span> <span class="o">&lt;</span> <span class="n">kserver</span><span class="p">;</span><span class="n">i</span> <span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">chan_fds</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">servers</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">-&gt;</span><span class="n">chan_fds</span><span class="p">[</span><span class="n">id_</span><span class="p">];</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="kt">void</span> <span class="n">signal</span><span class="p">(</span><span class="kt">int</span> <span class="n">serv_id</span><span class="p">,</span> <span class="kt">uint64_t</span> <span class="n">val</span><span class="p">)</span> <span class="p">{</span>
+        <span class="kt">ssize_t</span> <span class="n">ret</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+        <span class="k">do</span> <span class="p">{</span>
+            <span class="n">ret</span> <span class="o">=</span> <span class="n">write</span><span class="p">(</span><span class="n">chan_fds</span><span class="p">[</span><span class="n">serv_id</span><span class="p">],</span> <span class="o">&amp;</span><span class="n">val</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">val</span><span class="p">));</span>
+        <span class="p">}</span> <span class="k">while</span><span class="p">(</span><span class="n">ret</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="n">errno</span> <span class="o">==</span> <span class="n">EAGAIN</span><span class="p">);</span>
+        <span class="n">CHECK_GE</span><span class="p">(</span><span class="n">ret</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;TX &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">id_</span> <span class="o">&lt;&lt;</span> <span class="s">&quot; -&gt; &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">serv_id</span> <span class="o">&lt;&lt;</span> <span class="s">&quot; write fd error : &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">strerror</span><span class="p">(</span><span class="n">errno</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="kt">int</span> <span class="n">get_id</span><span class="p">()</span> <span class="p">{</span> <span class="k">return</span> <span class="n">id_</span><span class="p">;</span> <span class="p">}</span>
+
+<span class="p">};</span>
+</pre></div>
+
+
+<p>Main.cpp</p>
+<div class="highlight"><pre><span class="cp">#include &quot;coordinator.hpp&quot;</span>
+<span class="cp">#include &lt;pthread.h&gt;</span>
+<span class="cp">#include &lt;glog/logging.h&gt;</span>
+
+<span class="cp">#define NNODE (8)</span>
+
+<span class="k">struct</span> <span class="n">TXArgs</span> <span class="p">{</span>
+    <span class="n">Sender</span> <span class="o">*</span> <span class="n">tx</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="kt">void</span> <span class="o">*</span> <span class="nf">tx_fn</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">args_</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">struct</span> <span class="n">TXArgs</span> <span class="o">*</span> <span class="n">args</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="k">struct</span> <span class="n">TXArgs</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">args_</span><span class="p">);</span>
+    <span class="n">Sender</span> <span class="o">*</span> <span class="n">tx</span> <span class="o">=</span> <span class="n">args</span><span class="o">-&gt;</span><span class="n">tx</span><span class="p">;</span>
+
+    <span class="kt">int</span> <span class="n">times</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span>
+    <span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span><span class="n">i</span> <span class="o">&lt;</span> <span class="n">times</span><span class="p">;</span><span class="n">i</span> <span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+        <span class="kt">uint64_t</span> <span class="n">val</span> <span class="o">=</span> <span class="p">(</span><span class="kt">uint64_t</span><span class="p">)(</span><span class="n">tx</span><span class="o">-&gt;</span><span class="n">get_id</span><span class="p">())</span> <span class="o">+</span> <span class="mi">1</span><span class="p">;</span>
+        <span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">rid</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">rid</span> <span class="o">&lt;</span> <span class="n">NNODE</span><span class="p">;</span> <span class="n">rid</span> <span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">tx</span><span class="o">-&gt;</span><span class="n">signal</span><span class="p">(</span><span class="n">rid</span><span class="p">,</span> <span class="n">val</span><span class="p">);</span>
+            <span class="n">LOG</span><span class="p">(</span><span class="n">INFO</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">tx</span><span class="o">-&gt;</span><span class="n">get_id</span><span class="p">()</span> <span class="o">&lt;&lt;</span> <span class="s">&quot; -&gt; &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">rid</span> <span class="o">&lt;&lt;</span> <span class="s">&quot; val &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">val</span><span class="p">;</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="k">return</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="p">}</span>
+
+
+<span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">int</span> <span class="n">argc</span><span class="p">,</span> <span class="kt">char</span> <span class="o">**</span><span class="n">argv</span><span class="p">)</span> <span class="p">{</span>
+
+    <span class="n">Receiver</span> <span class="o">*</span> <span class="n">rxs</span><span class="p">[</span><span class="n">NNODE</span><span class="p">];</span>
+    <span class="n">Sender</span> <span class="o">*</span><span class="n">txs</span><span class="p">[</span><span class="n">NNODE</span><span class="p">];</span>
+
+    <span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span><span class="n">i</span> <span class="o">&lt;</span> <span class="n">NNODE</span><span class="p">;</span> <span class="n">i</span> <span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">rxs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Receiver</span><span class="p">(</span><span class="n">NNODE</span><span class="p">,</span> <span class="n">i</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span><span class="n">i</span> <span class="o">&lt;</span> <span class="n">NNODE</span><span class="p">;</span><span class="n">i</span> <span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">txs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Sender</span><span class="p">(</span><span class="n">NNODE</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">rxs</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="c1">// start listeners</span>
+    <span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span><span class="n">i</span> <span class="o">&lt;</span> <span class="n">NNODE</span><span class="p">;</span><span class="n">i</span> <span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">rxs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">-&gt;</span><span class="n">start_listener</span><span class="p">();</span>
+    <span class="p">}</span>
+
+
+    <span class="c1">// start senders</span>
+    <span class="kt">pthread_t</span> <span class="n">senders</span><span class="p">[</span><span class="n">NNODE</span><span class="p">];</span>
+    <span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span><span class="n">i</span> <span class="o">&lt;</span> <span class="n">NNODE</span><span class="p">;</span><span class="n">i</span> <span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">struct</span> <span class="n">TXArgs</span> <span class="o">*</span> <span class="n">sarg</span> <span class="o">=</span> <span class="p">(</span><span class="k">struct</span> <span class="n">TXArgs</span><span class="o">*</span><span class="p">)</span> <span class="n">malloc</span><span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="n">TXArgs</span><span class="p">));</span>
+        <span class="n">sarg</span><span class="o">-&gt;</span><span class="n">tx</span> <span class="o">=</span> <span class="n">txs</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+        <span class="n">pthread_create</span><span class="p">(</span><span class="o">&amp;</span><span class="p">(</span><span class="n">senders</span><span class="p">[</span><span class="n">i</span><span class="p">]),</span> <span class="nb">NULL</span><span class="p">,</span> <span class="n">tx_fn</span><span class="p">,</span> <span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span> <span class="n">sarg</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="c1">// join threads</span>
+    <span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span><span class="n">i</span> <span class="o">&lt;</span> <span class="n">NNODE</span><span class="p">;</span><span class="n">i</span> <span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">pthread_join</span><span class="p">(</span><span class="n">senders</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="nb">NULL</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span><span class="n">i</span> <span class="o">&lt;</span> <span class="n">NNODE</span><span class="p">;</span><span class="n">i</span> <span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">delete</span> <span class="n">rxs</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+        <span class="n">rxs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="k">nullptr</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
             </div>
             <!-- /.entry-content -->
     <hr/>
