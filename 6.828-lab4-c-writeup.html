@@ -35,8 +35,6 @@
     <link href="http://zorksylar.github.io/theme/css/pygments/manni.css" rel="stylesheet">
     <link rel="stylesheet" href="http://zorksylar.github.io/theme/css/style.css" type="text/css"/>
 
-        <link href="http://zorksylar.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate"
-              title="Z's Thoughts ATOM Feed"/>
 
 
 
@@ -122,7 +120,7 @@ Trap 和 Interrupt 的区别：</p>
 <li>对于Trap，不会修改<code>IF</code>标志位。</li>
 </ul>
 <p>在JOS中，通过SETGATE中的istrap可以设置。</p>
-<div class="highlight"><pre><span class="cp">#define STS_CG32  0xC     </span><span class="c1">// 32-bit Call Gate</span>
+<div class="highlight"><pre><span></span><span class="cp">#define STS_CG32  0xC     </span><span class="c1">// 32-bit Call Gate</span>
 <span class="cp">#define STS_IG32  0xE     </span><span class="c1">// 32-bit Interrupt Gate</span>
 <span class="cp">#define STS_TG32  0xF     </span><span class="c1">// 32-bit Trap Gate</span>
 
@@ -157,7 +155,7 @@ Trap 和 Interrupt 的区别：</p>
 
 <h4>Exercise 13</h4>
 <p>初始化IDT使得JOS能够handle外部中断。在<code>kern/trapentry.S</code>中添加相应的条目，同时在<code>kern/trap.c</code>中初始化interrupt gate, 注意在SETGATE的时候，istrap要置位0表示这是一个Interrupt，在进入内核态之后，外部中断被禁止。同时在<code>kern/env.c</code>中的<code>env_alloc</code>中初始化eflags。当在进入trap的时候，保存进程的<code>trapframe</code>，其中包含<code>eflags</code>，这样在中断处理结束之后，从内核态转到用户态的时候，通过<code>trapframe</code>恢复<code>eflags</code>，这样就保证了在恢复到用户态的时候，允许外部中断。</p>
-<div class="highlight"><pre><span class="c1">// Enable interrupts while in user mode.</span>
+<div class="highlight"><pre><span></span><span class="c1">// Enable interrupts while in user mode.</span>
 <span class="c1">// LAB 4: Your code here.</span>
 <span class="c1">// Set FL_IF, so when return in user mode, eflags will be enabled.</span>
 <span class="n">e</span><span class="o">-&gt;</span><span class="n">env_tf</span><span class="p">.</span><span class="n">tf_eflags</span> <span class="o">=</span> <span class="n">e</span><span class="o">-&gt;</span><span class="n">env_tf</span><span class="p">.</span><span class="n">tf_eflags</span> <span class="o">|</span> <span class="n">FL_IF</span><span class="p">;</span>
@@ -166,7 +164,7 @@ Trap 和 Interrupt 的区别：</p>
 
 <h4>Exercise 14</h4>
 <p>为了能够让kernel拿到CPU的控制权，需要每隔一段时间差生一个外部中断，在内核初始化的时候，通过调用<code>lapic_init</code>和<code>pic_init</code>设置好了硬件会每隔一段时间产生外部中断，这个Exercise要做的就是在产生中断的时候，通过IDT找到中断处理函数，让内核拿到CPU的控制权，调度其他进程。</p>
-<div class="highlight"><pre><span class="c1">// Handle clock interrupts. Don&#39;t forget to acknowledge the</span>
+<div class="highlight"><pre><span></span><span class="c1">// Handle clock interrupts. Don&#39;t forget to acknowledge the</span>
 <span class="c1">// interrupt using lapic_eoi() before calling the scheduler!</span>
 <span class="c1">// LAB 4: Your code here.</span>
 <span class="k">if</span> <span class="p">(</span><span class="n">tf</span><span class="o">-&gt;</span><span class="n">tf_trapno</span> <span class="o">==</span> <span class="n">IRQ_OFFSET</span> <span class="o">+</span> <span class="n">IRQ_TIMER</span><span class="p">){</span>
@@ -188,18 +186,18 @@ Trap 和 Interrupt 的区别：</p>
 <h4>Exercise 15</h4>
 <p>IPC传送的消息包含两部分：32 bit value 和 single page mapping。 page mapping 作为消息的一部，可以实现任意两个进程共享一块内存，同时，如果传送的消息比较大，可以通过page mapping 实现消息传送。 <br />
 为了实现IPC，在<code>struct Env</code>中，多出了以下字段：</p>
-<div class="highlight"><pre><span class="c1">// Lab 4 IPC</span>
+<div class="highlight"><pre><span></span><span class="c1">// Lab 4 IPC</span>
 <span class="kt">bool</span> <span class="n">env_ipc_recving</span><span class="p">;</span>   <span class="c1">// Env is blocked receiving，表示env等待消息中。如果env_ipc_recving位false，那么任何发送进程都不能将消息发送到这个env中。</span>
 <span class="kt">void</span> <span class="o">*</span><span class="n">env_ipc_dstva</span><span class="p">;</span>    <span class="c1">// VA at which to map received page. 消息中的page mapping 部分</span>
 <span class="kt">uint32_t</span> <span class="n">env_ipc_value</span><span class="p">;</span>   <span class="c1">// Data value sent to us, 消息中的 32bit value 部分</span>
-<span class="kt">envid_t</span> <span class="n">env_ipc_from</span><span class="p">;</span>   <span class="c1">// envid of the sender,如果收到消息，记录消息的发送者</span>
+<span class="n">envid_t</span> <span class="n">env_ipc_from</span><span class="p">;</span>   <span class="c1">// envid of the sender,如果收到消息，记录消息的发送者</span>
 <span class="kt">int</span> <span class="n">env_ipc_perm</span><span class="p">;</span>   <span class="c1">// Perm of page mapping received, 消息中的page mapping 部分</span>
 </pre></div>
 
 
 <p>注意在<code>env_alloc</code>中，初始化对应的<code>struct Env</code>字段。</p>
 <p><strong>sys_ipc_recv</strong> : 进程通过调用这个系统调用，实现接受消息。当进程调用这个系统调用的时候，内核会阻塞这个进程，将env的状态设置位<code>ENV_NOT_RUNNABLE</code>，直到接受到任何进程发送的消息为止，这个进程才能得到调度。注意，对发送消息的进程没有parent 进程的限制，任何进程都能发送消息给任何进程(在JOS中)。注意对参数的检查。如果不接受传递的page mapping，只需要将<code>dstva</code>置为<code>UTOP</code>就可以了， </p>
-<div class="highlight"><pre><span class="c1">// Block until a value is ready.  Record that you want to receive</span>
+<div class="highlight"><pre><span></span><span class="c1">// Block until a value is ready.  Record that you want to receive</span>
 <span class="c1">// using the env_ipc_recving and env_ipc_dstva fields of struct Env,</span>
 <span class="c1">// mark yourself not runnable, and then give up the CPU.</span>
 <span class="c1">//</span>
@@ -233,13 +231,13 @@ Trap 和 Interrupt 的区别：</p>
 
 
 <p><strong>sys_ipc_try_send</strong> : 检查参数，同时传递32bit value 和 page mapping。这里有个trick，因为srcva的范围必须在<code>UTOP</code>之下，所以如何判断是否进行page mapping 呢？只要传递srcva &gt;= UTOP 就可以了，只要让系统调用对这种情况不做处理，不抛出<code>-E_INVAL</code>。</p>
-<div class="highlight"><pre><span class="k">static</span> <span class="kt">int</span>
-<span class="nf">sys_ipc_try_send</span><span class="p">(</span><span class="kt">envid_t</span> <span class="n">envid</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">value</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">srcva</span><span class="p">,</span> <span class="kt">unsigned</span> <span class="n">perm</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><span class="k">static</span> <span class="kt">int</span>
+<span class="nf">sys_ipc_try_send</span><span class="p">(</span><span class="n">envid_t</span> <span class="n">envid</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">value</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">srcva</span><span class="p">,</span> <span class="kt">unsigned</span> <span class="n">perm</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="c1">// LAB 4: Your code here.</span>
   <span class="kt">int</span> <span class="n">r</span><span class="p">;</span>
   <span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span> <span class="n">dstenv</span><span class="p">;</span>
-  <span class="kt">pte_t</span> <span class="o">*</span> <span class="n">pte</span><span class="p">;</span>
+  <span class="n">pte_t</span> <span class="o">*</span> <span class="n">pte</span><span class="p">;</span>
   <span class="k">struct</span> <span class="n">PageInfo</span> <span class="o">*</span><span class="n">pp</span><span class="p">;</span>
   <span class="c1">// Check parameters</span>
   <span class="c1">// Check envid and env status</span>
@@ -294,7 +292,7 @@ Trap 和 Interrupt 的区别：</p>
 
 <p><strong>lib 库对ipc的包装</strong> <br />
 <strong>ipc_recv</strong> : 如果不需要page mapping，那么在系统调用的时候，<code>dstva</code>传递<code>UTOP</code>。</p>
-<div class="highlight"><pre><span class="c1">// Receive a value via IPC and return it.</span>
+<div class="highlight"><pre><span></span><span class="c1">// Receive a value via IPC and return it.</span>
 <span class="c1">// If &#39;pg&#39; is nonnull, then any page sent by the sender will be mapped at</span>
 <span class="c1">//  that address.</span>
 <span class="c1">// If &#39;from_env_store&#39; is nonnull, then store the IPC sender&#39;s envid in</span>
@@ -312,7 +310,7 @@ Trap 和 Interrupt 的区别：</p>
 <span class="c1">//   as meaning &quot;no page&quot;.  (Zero is not the right value, since that&#39;s</span>
 <span class="c1">//   a perfectly valid place to map a page.)</span>
 <span class="kt">int32_t</span>
-<span class="nf">ipc_recv</span><span class="p">(</span><span class="kt">envid_t</span> <span class="o">*</span><span class="n">from_env_store</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">pg</span><span class="p">,</span> <span class="kt">int</span> <span class="o">*</span><span class="n">perm_store</span><span class="p">)</span>
+<span class="nf">ipc_recv</span><span class="p">(</span><span class="n">envid_t</span> <span class="o">*</span><span class="n">from_env_store</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">pg</span><span class="p">,</span> <span class="kt">int</span> <span class="o">*</span><span class="n">perm_store</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="c1">// LAB 4: Your code here.</span>
   <span class="kt">int</span> <span class="n">r</span><span class="p">;</span>
@@ -344,7 +342,7 @@ Trap 和 Interrupt 的区别：</p>
 
 
 <p><strong>ipc_send</strong> : 如果返回<code>-E_IPC_NOT_RECV</code>，表示接受消息的进程还没有<code>struct Env</code>中的<code>env_ipc_recving</code>，需要继续try。</p>
-<div class="highlight"><pre><span class="c1">// Send &#39;val&#39; (and &#39;pg&#39; with &#39;perm&#39;, if &#39;pg&#39; is nonnull) to &#39;toenv&#39;.</span>
+<div class="highlight"><pre><span></span><span class="c1">// Send &#39;val&#39; (and &#39;pg&#39; with &#39;perm&#39;, if &#39;pg&#39; is nonnull) to &#39;toenv&#39;.</span>
 <span class="c1">// This function keeps trying until it succeeds.</span>
 <span class="c1">// It should panic() on any error other than -E_IPC_NOT_RECV.</span>
 <span class="c1">//</span>
@@ -353,7 +351,7 @@ Trap 和 Interrupt 的区别：</p>
 <span class="c1">//   If &#39;pg&#39; is null, pass sys_ipc_recv a value that it will understand</span>
 <span class="c1">//   as meaning &quot;no page&quot;.  (Zero is not the right value.)</span>
 <span class="kt">void</span>
-<span class="nf">ipc_send</span><span class="p">(</span><span class="kt">envid_t</span> <span class="n">to_env</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">val</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">pg</span><span class="p">,</span> <span class="kt">int</span> <span class="n">perm</span><span class="p">)</span>
+<span class="nf">ipc_send</span><span class="p">(</span><span class="n">envid_t</span> <span class="n">to_env</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">val</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">pg</span><span class="p">,</span> <span class="kt">int</span> <span class="n">perm</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="c1">// LAB 4: Your code here.</span>
   <span class="kt">int</span> <span class="n">r</span> <span class="o">=</span> <span class="o">-</span><span class="n">E_IPC_NOT_RECV</span><span class="p">;</span>

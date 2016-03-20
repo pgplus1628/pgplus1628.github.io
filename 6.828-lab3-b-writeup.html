@@ -35,8 +35,6 @@
     <link href="http://zorksylar.github.io/theme/css/pygments/manni.css" rel="stylesheet">
     <link rel="stylesheet" href="http://zorksylar.github.io/theme/css/style.css" type="text/css"/>
 
-        <link href="http://zorksylar.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate"
-              title="Z's Thoughts ATOM Feed"/>
 
 
 
@@ -113,7 +111,7 @@ Z's Thoughts            </a>
                 <h3>Page Faults, Breakpoints Exceptions, and System Calls</h3>
 <h3>Exercise 5,6,7</h3>
 <p>在trap_dispath中添加代码，能够传到相应的处理函数执行。</p>
-<div class="highlight"><pre><span class="k">static</span> <span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="k">static</span> <span class="kt">void</span>
 <span class="nf">trap_dispatch</span><span class="p">(</span><span class="k">struct</span> <span class="n">Trapframe</span> <span class="o">*</span><span class="n">tf</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="k">if</span> <span class="p">(</span><span class="n">tf</span><span class="o">-&gt;</span><span class="n">tf_trapno</span> <span class="o">==</span> <span class="n">T_PGFLT</span><span class="p">)</span> <span class="p">{</span>
@@ -144,7 +142,7 @@ Z's Thoughts            </a>
 
 
 <p>添加system_call 参数传递代码。注意系统调用对应的中断的 DPL = 3。</p>
-<div class="highlight"><pre><span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="kt">void</span>
 <span class="nf">system_call_handler</span><span class="p">(</span><span class="k">struct</span> <span class="n">Trapframe</span> <span class="o">*</span><span class="n">tf</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="kt">uint32_t</span> <span class="n">syscallno</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">a2</span><span class="p">,</span> <span class="n">a3</span><span class="p">,</span> <span class="n">a4</span><span class="p">,</span> <span class="n">a5</span><span class="p">;</span>
@@ -160,7 +158,7 @@ Z's Thoughts            </a>
 
 
 <p>添加dispatch system_call 的代码：</p>
-<div class="highlight"><pre><span class="c1">// Dispatches to the correct kernel function, passing the arguments.</span>
+<div class="highlight"><pre><span></span><span class="c1">// Dispatches to the correct kernel function, passing the arguments.</span>
 <span class="kt">int32_t</span>
 <span class="nf">syscall</span><span class="p">(</span><span class="kt">uint32_t</span> <span class="n">syscallno</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">a1</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">a2</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">a3</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">a4</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">a5</span><span class="p">)</span>
 <span class="p">{</span>
@@ -175,11 +173,11 @@ Z's Thoughts            </a>
     <span class="k">break</span><span class="p">;</span>
 
   <span class="k">case</span> <span class="nl">SYS_getenvid</span> <span class="p">:</span>
-    <span class="n">ret</span> <span class="o">=</span> <span class="p">(</span><span class="kt">envid_t</span><span class="p">)</span><span class="n">sys_getenvid</span><span class="p">();</span>
+    <span class="n">ret</span> <span class="o">=</span> <span class="p">(</span><span class="n">envid_t</span><span class="p">)</span><span class="n">sys_getenvid</span><span class="p">();</span>
     <span class="k">break</span><span class="p">;</span>
 
   <span class="k">case</span> <span class="nl">SYS_env_destroy</span> <span class="p">:</span>
-    <span class="n">ret</span> <span class="o">=</span> <span class="p">(</span><span class="kt">uint32_t</span><span class="p">)</span><span class="n">sys_env_destroy</span><span class="p">((</span><span class="kt">envid_t</span><span class="p">)</span><span class="n">a1</span><span class="p">);</span>
+    <span class="n">ret</span> <span class="o">=</span> <span class="p">(</span><span class="kt">uint32_t</span><span class="p">)</span><span class="n">sys_env_destroy</span><span class="p">((</span><span class="n">envid_t</span><span class="p">)</span><span class="n">a1</span><span class="p">);</span>
     <span class="k">break</span><span class="p">;</span>
 
   <span class="k">default</span> <span class="o">:</span>
@@ -194,12 +192,12 @@ Z's Thoughts            </a>
 
 <h3>Exercise 8,9,10</h3>
 <p>在libmain.c 中添加代码，初始化 thisenv，调用sys_getenvid()获取当前运行进程的envid，然后根据ENVX(envid)得出当前env在envs数组中的偏移量，获取thisenv。 进程退出的时候，exit() 函数调用系统调用sys_env_destory(0), 0 表示当前的env。</p>
-<div class="highlight"><pre><span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="kt">void</span>
 <span class="nf">libmain</span><span class="p">(</span><span class="kt">int</span> <span class="n">argc</span><span class="p">,</span> <span class="kt">char</span> <span class="o">**</span><span class="n">argv</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="c1">// set thisenv to point at our Env structure in envs[].</span>
   <span class="c1">// LAB 3: Your code here.</span>
-  <span class="kt">envid_t</span> <span class="n">envid</span> <span class="o">=</span> <span class="n">sys_getenvid</span><span class="p">();</span>
+  <span class="n">envid_t</span> <span class="n">envid</span> <span class="o">=</span> <span class="n">sys_getenvid</span><span class="p">();</span>
   <span class="n">thisenv</span> <span class="o">=</span> <span class="o">&amp;</span><span class="p">(</span><span class="n">envs</span><span class="p">[</span><span class="n">ENVX</span><span class="p">(</span><span class="n">envid</span><span class="p">)]);</span>
 
   <span class="c1">// save the name of the program so that panic() can use it</span>
@@ -216,7 +214,7 @@ Z's Thoughts            </a>
 
 
 <p>在lib/entry.S 中已经初始化了envs，指向系统的envs数组，所以envs可以直接 extern 之后使用。</p>
-<div class="highlight"><pre><span class="p">.</span><span class="n">data</span>
+<div class="highlight"><pre><span></span><span class="p">.</span><span class="n">data</span>
 <span class="c1">// Define the global symbols &#39;envs&#39;, &#39;pages&#39;, &#39;uvpt&#39;, and &#39;uvpd&#39;</span>
 <span class="c1">// so that they can be used in C as if they were ordinary global arrays.</span>
   <span class="p">.</span><span class="n">globl</span> <span class="n">envs</span>
@@ -232,11 +230,11 @@ Z's Thoughts            </a>
 
 <p>处理PageFault。对于这个中断，如果发生在kernel处理自己的数据结构的时候，那么说明kernel bug了，这时候就应该把kernel panic 掉。如果发生在kernel 去引用user的一个指针的时候（一个指针就是一个虚拟地址），如kernel 访问 user 的一个地址，出现了PGFLT，那么就需要把 user 的这个env panic 掉。因为kernel有更多的权限，所以在处理PGFLT的时候，应该小心。
 为了在kernel态区分这两种PGFLT，user_mem_check()这个函数就是判断这个env是否有访问一个虚拟地址va的权限的。</p>
-<div class="highlight"><pre><span class="kt">int</span>
+<div class="highlight"><pre><span></span><span class="kt">int</span>
 <span class="nf">user_mem_check</span><span class="p">(</span><span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span><span class="n">env</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">va</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">len</span><span class="p">,</span> <span class="kt">int</span> <span class="n">perm</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="kt">void</span> <span class="o">*</span> <span class="n">va_end</span> <span class="o">=</span> <span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span><span class="n">ROUNDUP</span><span class="p">(</span><span class="n">va</span> <span class="o">+</span> <span class="n">len</span><span class="p">,</span> <span class="n">PGSIZE</span><span class="p">);</span>
-  <span class="kt">pte_t</span> <span class="o">*</span> <span class="n">pte</span><span class="p">;</span>
+  <span class="n">pte_t</span> <span class="o">*</span> <span class="n">pte</span><span class="p">;</span>
   <span class="c1">// 注意这里 第一次的va不用ROUND，之后的都需要</span>
   <span class="c1">// 如果 va = va + PGSIZE，那么在 buggyhello2 就过不了</span>
   <span class="c1">// 囧，虽然我觉得功能上都一样</span>
@@ -254,7 +252,7 @@ Z's Thoughts            </a>
 
 
 <p>在PGFLT中添加判断，如果是kernel在处理自己的数据结构的时候产生的，那么就直接panic掉。因为tf-&gt;cs保存的是中断之前的cs，所以通过判断cs的CPL就能够判断出是user的还是kernel的。通过error code 的 U/S 字段也一样。</p>
-<div class="highlight"><pre><span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="kt">void</span>
 <span class="nf">page_fault_handler</span><span class="p">(</span><span class="k">struct</span> <span class="n">Trapframe</span> <span class="o">*</span><span class="n">tf</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="kt">uint32_t</span> <span class="n">fault_va</span><span class="p">;</span>
@@ -284,7 +282,7 @@ Z's Thoughts            </a>
 
 
 <p>user发出系统调用，kernel在访问user的地址空间的时候都需要做检查，在系统调用中添加mem检查，下面的const char *s 就是用户的一个地址空间。</p>
-<div class="highlight"><pre><span class="k">static</span> <span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="k">static</span> <span class="kt">void</span>
 <span class="nf">sys_cputs</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">s</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">len</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="c1">// Check that the user has permission to read memory [s, s+len).</span>
@@ -299,7 +297,7 @@ Z's Thoughts            </a>
 
 
 <p>在kern/kdebug.c 中添加对 user 地址的检查。</p>
-<div class="highlight"><pre><span class="kt">int</span>
+<div class="highlight"><pre><span></span><span class="kt">int</span>
 <span class="nf">debuginfo_eip</span><span class="p">(</span><span class="kt">uintptr_t</span> <span class="n">addr</span><span class="p">,</span> <span class="k">struct</span> <span class="n">Eipdebuginfo</span> <span class="o">*</span><span class="n">info</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="p">...</span> 

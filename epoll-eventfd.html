@@ -34,8 +34,6 @@
     <link href="http://zorksylar.github.io/theme/css/pygments/manni.css" rel="stylesheet">
     <link rel="stylesheet" href="http://zorksylar.github.io/theme/css/style.css" type="text/css"/>
 
-        <link href="http://zorksylar.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate"
-              title="Z's Thoughts ATOM Feed"/>
 
 
 
@@ -116,7 +114,7 @@ Z's Thoughts            </a>
 <h3>conditional variable V.S. eventfd V.S. sockets</h3>
 <p><code>pthread</code> provides <code>conditional wait</code> mechanism. Thread A wait for some event, and thread B can notify the threads that waiting on the event. This is the <strong>Wait/Notify</strong> thread synchronization. One thread wait and the other thread notify. The limitation of <code>conditional wait</code> is one thread can not wait on multiple condition variables.</p>
 <p><code>eventfd</code> is introduced in Linux kernel after version 2.6.22.</p>
-<div class="highlight"><pre><span class="cp">#include &lt;sys/eventfd.h&gt;</span>
+<div class="highlight"><pre><span></span><span class="cp">#include</span> <span class="cpf">&lt;sys/eventfd.h&gt;</span><span class="cp"></span>
 <span class="kt">int</span> <span class="nf">eventfd</span><span class="p">(</span><span class="kt">unsigned</span> <span class="kt">int</span> <span class="n">initval</span><span class="p">,</span> <span class="kt">int</span> <span class="n">flags</span><span class="p">);</span>
 </pre></div>
 
@@ -131,20 +129,20 @@ Z's Thoughts            </a>
 <p>The Poll/Notify mechanism can be implemented with eventfd and epoll. For the Receiver, it only needs to create an eventfd for each channel, and add them to  epoll file descriptor. The listening thread <code>epoll_wait</code> on the epoll file descriptor.</p>
 <p>These codes can be found in <a href="https://github.com/zorksylar/ZLab/tree/master/eventfd">Github</a></p>
 <p>The Coordinator Implmentation :</p>
-<div class="highlight"><pre><span class="c1">//</span>
+<div class="highlight"><pre><span></span><span class="c1">//</span>
 <span class="c1">// Created by zorksylar on 2/16/16.</span>
 <span class="c1">//</span>
 
 <span class="cp">#pragma once</span>
 
-<span class="cp">#include &lt;unistd.h&gt;</span>
-<span class="cp">#include &lt;pthread.h&gt;</span>
-<span class="cp">#include &lt;sys/time.h&gt;</span>
-<span class="cp">#include &lt;sys/eventfd.h&gt;</span>
-<span class="cp">#include &lt;sys/epoll.h&gt;</span>
-<span class="cp">#include &lt;glog/logging.h&gt;</span>
-<span class="cp">#include &lt;errno.h&gt;</span>
-<span class="cp">#include &lt;stdint.h&gt;</span>
+<span class="cp">#include</span> <span class="cpf">&lt;unistd.h&gt;</span><span class="cp"></span>
+<span class="cp">#include</span> <span class="cpf">&lt;pthread.h&gt;</span><span class="cp"></span>
+<span class="cp">#include</span> <span class="cpf">&lt;sys/time.h&gt;</span><span class="cp"></span>
+<span class="cp">#include</span> <span class="cpf">&lt;sys/eventfd.h&gt;</span><span class="cp"></span>
+<span class="cp">#include</span> <span class="cpf">&lt;sys/epoll.h&gt;</span><span class="cp"></span>
+<span class="cp">#include</span> <span class="cpf">&lt;glog/logging.h&gt;</span><span class="cp"></span>
+<span class="cp">#include</span> <span class="cpf">&lt;errno.h&gt;</span><span class="cp"></span>
+<span class="cp">#include</span> <span class="cpf">&lt;stdint.h&gt;</span><span class="cp"></span>
 
 
 <span class="cp">#define EPOLL_WAIT_TIMEOUT (1000) </span><span class="c1">// 1.0 second</span>
@@ -163,7 +161,7 @@ Z's Thoughts            </a>
 
 <span class="k">public</span> <span class="o">:</span>
     <span class="kt">int</span> <span class="o">*</span> <span class="n">chan_fds</span><span class="p">;</span> <span class="c1">// event fds of this channel</span>
-    <span class="kt">pthread_t</span> <span class="n">listener</span><span class="p">;</span>
+    <span class="n">pthread_t</span> <span class="n">listener</span><span class="p">;</span>
 
     <span class="n">Receiver</span><span class="p">(</span><span class="kt">int</span> <span class="n">kclients</span><span class="p">,</span> <span class="kt">int</span> <span class="n">id</span><span class="p">)</span> <span class="o">:</span> <span class="n">kclient_</span><span class="p">(</span><span class="n">kclients</span><span class="p">),</span> <span class="n">id_</span><span class="p">(</span><span class="n">id</span><span class="p">)</span> <span class="p">{</span>
         <span class="n">chan_fds</span> <span class="o">=</span> <span class="k">new</span> <span class="kt">int</span> <span class="p">[</span><span class="n">kclient_</span><span class="p">];</span>
@@ -292,9 +290,9 @@ Z's Thoughts            </a>
 
 
 <p>Main.cpp</p>
-<div class="highlight"><pre><span class="cp">#include &quot;coordinator.hpp&quot;</span>
-<span class="cp">#include &lt;pthread.h&gt;</span>
-<span class="cp">#include &lt;glog/logging.h&gt;</span>
+<div class="highlight"><pre><span></span><span class="cp">#include</span> <span class="cpf">&quot;coordinator.hpp&quot;</span><span class="cp"></span>
+<span class="cp">#include</span> <span class="cpf">&lt;pthread.h&gt;</span><span class="cp"></span>
+<span class="cp">#include</span> <span class="cpf">&lt;glog/logging.h&gt;</span><span class="cp"></span>
 
 <span class="cp">#define NNODE (8)</span>
 
@@ -339,7 +337,7 @@ Z's Thoughts            </a>
 
 
     <span class="c1">// start senders</span>
-    <span class="kt">pthread_t</span> <span class="n">senders</span><span class="p">[</span><span class="n">NNODE</span><span class="p">];</span>
+    <span class="n">pthread_t</span> <span class="n">senders</span><span class="p">[</span><span class="n">NNODE</span><span class="p">];</span>
     <span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span><span class="n">i</span> <span class="o">&lt;</span> <span class="n">NNODE</span><span class="p">;</span><span class="n">i</span> <span class="o">++</span><span class="p">)</span> <span class="p">{</span>
         <span class="k">struct</span> <span class="n">TXArgs</span> <span class="o">*</span> <span class="n">sarg</span> <span class="o">=</span> <span class="p">(</span><span class="k">struct</span> <span class="n">TXArgs</span><span class="o">*</span><span class="p">)</span> <span class="n">malloc</span><span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="n">TXArgs</span><span class="p">));</span>
         <span class="n">sarg</span><span class="o">-&gt;</span><span class="n">tx</span> <span class="o">=</span> <span class="n">txs</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>

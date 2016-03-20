@@ -35,8 +35,6 @@
     <link href="http://zorksylar.github.io/theme/css/pygments/manni.css" rel="stylesheet">
     <link rel="stylesheet" href="http://zorksylar.github.io/theme/css/style.css" type="text/css"/>
 
-        <link href="http://zorksylar.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate"
-              title="Z's Thoughts ATOM Feed"/>
 
 
 
@@ -128,8 +126,8 @@ Z's Thoughts            </a>
 <p>一个CPU通过MMIO访问对应的LAPIC。MMIO (Memory Mapped IO) : 将物理地址映射到一些IO设备的寄存器，这样通过对这些个物理地址的load/store操作，就相当于对这些寄存器进行了访问。(在之前的Lab里面，page_init()的时候，留出了IO hole，就是为了这里MMIO)。</p>
 <h4>Exercise 1</h4>
 <p>为 APIC 需要MMIO访问的地址分配空间。给出MMIO 的 pa 和 len，返回访问这个 pa 的 va。通过boot_map_region函数实现。注意对齐和检测地址溢出。因为这块内存不是普通的内存，所以安全起见，需要对这块内存不做缓存处理，所以PTE_PCD | PTE_PWT | PTE_W。 PTE_PCD 表示 page cache disabled, PTE_PWT 表示 page write through.</p>
-<div class="highlight"><pre><span class="kt">void</span> <span class="o">*</span>
-<span class="nf">mmio_map_region</span><span class="p">(</span><span class="kt">physaddr_t</span> <span class="n">pa</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">size</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><span class="kt">void</span> <span class="o">*</span>
+<span class="nf">mmio_map_region</span><span class="p">(</span><span class="n">physaddr_t</span> <span class="n">pa</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">size</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="kt">void</span> <span class="o">*</span> <span class="n">ret</span> <span class="o">=</span> <span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span><span class="n">base</span><span class="p">;</span>
   <span class="n">size</span> <span class="o">=</span> <span class="n">ROUNDUP</span><span class="p">(</span><span class="n">size</span><span class="p">,</span> <span class="n">PGSIZE</span><span class="p">);</span>
@@ -162,7 +160,7 @@ Z's Thoughts            </a>
 <p>这个时候 APs 算是 boot 完成了。</p>
 <h4>Exercise 2</h4>
 <p>因为在boot APs的时候，需要将mpentry.S load到 MPENTRY_ADDR中，所以在page_init()的时候，需要把MPENTRY_ADDR 标记为占用。</p>
-<div class="highlight"><pre><span class="k">for</span> <span class="p">(</span> <span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">PGNUM</span><span class="p">(</span><span class="n">IOPHYSMEM</span><span class="p">);</span> <span class="n">i</span> <span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+<div class="highlight"><pre><span></span><span class="k">for</span> <span class="p">(</span> <span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">PGNUM</span><span class="p">(</span><span class="n">IOPHYSMEM</span><span class="p">);</span> <span class="n">i</span> <span class="o">++</span><span class="p">)</span> <span class="p">{</span>
   <span class="c1">// LAB 4 mark the physical page at MPENTRY_PADDR as in use.</span>
   <span class="k">if</span> <span class="p">(</span> <span class="n">i</span> <span class="o">==</span> <span class="n">PGNUM</span><span class="p">(</span><span class="n">MPENTRY_PADDR</span><span class="p">)</span> <span class="p">)</span> <span class="p">{</span>
     <span class="n">pages</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">pp_ref</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
@@ -190,7 +188,7 @@ Z's Thoughts            </a>
 <h3>Exercise 3, 4</h3>
 <h4>Something need to know</h4>
 <p>对于多核操作系统，需要注意对于每个CPU，哪些数据结构是私有的，哪些是共享的。在JOS中，对每个CPU都有struct CpuInfo:</p>
-<div class="highlight"><pre><span class="c1">// Per-CPU state</span>
+<div class="highlight"><pre><span></span><span class="c1">// Per-CPU state</span>
 <span class="k">struct</span> <span class="n">CpuInfo</span> <span class="p">{</span>
   <span class="kt">uint8_t</span> <span class="n">cpu_id</span><span class="p">;</span>                 <span class="c1">// Local APIC ID; index into cpus[] below</span>
   <span class="k">volatile</span> <span class="kt">unsigned</span> <span class="n">cpu_status</span><span class="p">;</span>   <span class="c1">// The status of the CPU</span>
@@ -208,7 +206,7 @@ Z's Thoughts            </a>
 </ol>
 <h4>Exercise 3</h4>
 <p>在BSP mem_init()的时候对所有CPU初始化栈的页表:</p>
-<div class="highlight"><pre><span class="k">static</span> <span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="k">static</span> <span class="kt">void</span>
 <span class="nf">mem_init_mp</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
@@ -225,7 +223,7 @@ Z's Thoughts            </a>
 
 <h4>Exercise 4</h4>
 <p>在BSP 和 APs trap_init()的时候，初始化每个CPU的TSS和IDT</p>
-<div class="highlight"><pre><span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="kt">void</span>
 <span class="nf">trap_init_percpu</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="n">thiscpu</span><span class="o">-&gt;</span><span class="n">cpu_ts</span><span class="p">.</span><span class="n">ts_esp0</span> <span class="o">=</span> <span class="n">KSTACKTOP</span> <span class="o">-</span> <span class="p">(</span><span class="n">thiscpu</span><span class="o">-&gt;</span><span class="n">cpu_id</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">KSTKSIZE</span> <span class="o">+</span> <span class="n">KSTKGAP</span><span class="p">);</span>
@@ -251,7 +249,7 @@ Z's Thoughts            </a>
 <p>多核中，时刻要记住，<strong>一行代码都是分成很多小的指令执行的，每个指令执行的时候，都可以被中断掉，并且每行代码都可能被多个CPU同时执行。</strong></p>
 <p>为了解决多个CPU访问同一段程序的时候的 race condition，JOS中使用了内核大锁(big kernel lock),其作用就是只能又一个env在kernel态运行，在任何时间，都只能又一个user 的 env 在kernel 执行，这样就防止出现多个CPU同时修改一个env的信息的情况了。所以在从user 进入kernel的时候和kernel跳到user的时候，需要lock_kernel和unlock_kernel。</p>
 <p>Big kernel lock 采用的是spinlock，当要尝试获取锁的时候，如果没有拿到就spin在那里，直到拿到为止。</p>
-<div class="highlight"><pre><span class="n">truct</span> <span class="n">spinlock</span> <span class="p">{</span>
+<div class="highlight"><pre><span></span><span class="n">truct</span> <span class="n">spinlock</span> <span class="p">{</span>
   <span class="kt">unsigned</span> <span class="n">locked</span><span class="p">;</span>       <span class="c1">// Is the lock held?</span>
 
 <span class="cp">#ifdef DEBUG_SPINLOCK</span>
@@ -276,7 +274,7 @@ Z's Thoughts            </a>
 <li>%eax = temp</li>
 <li>un-freeze other memory activity</li>
 </ol>
-<div class="highlight"><pre><span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="kt">void</span>
 <span class="nf">spin_lock</span><span class="p">(</span><span class="k">struct</span> <span class="n">spinlock</span> <span class="o">*</span><span class="n">lk</span><span class="p">)</span>
 <span class="p">{</span>
 <span class="cp">#ifdef DEBUG_SPINLOCK</span>
@@ -322,7 +320,7 @@ Z's Thoughts            </a>
 <h3>Exercise 6</h3>
 <h4>Exercise 6</h4>
 <p>实现一个Round-Robin的调度算法，sched_yield() 函数的作用就是从envs中轮询挑选一个空闲的env来执行，如果没有，那么就继续执行之前的那个env，注意不能让两个CPU同时跑一个env。注意，轮询的时候，要从上次sched 的env的位置开始往下找，而不是从头，否则会有一些env始终无法调度到的情况。</p>
-<div class="highlight"><pre><span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="kt">void</span>
 <span class="nf">sched_yield</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span><span class="n">idle</span><span class="p">;</span>
@@ -358,7 +356,7 @@ Z's Thoughts            </a>
 <h4>Question 4</h4>
 <p>old env 的registers包含了old env的运行的状态，运行到哪个eip，使用的是哪个ss，ssp等等，当这个old env被调度，继续执行的时候，需要知道之前执行到哪里了，所以是需要保存old env的registers的。</p>
 <p>old env 的 reigsters 是在 trap(trapframe)中，把参数 trapframe，拷贝到 curenv-&gt;env_tf，上的，这样就保存了trap之前，env 的状态了，curenv 是在 UENV 虚拟地址上的。</p>
-<div class="highlight"><pre><span class="c1">// Copy trap frame (which is currently on the stack)</span>
+<div class="highlight"><pre><span></span><span class="c1">// Copy trap frame (which is currently on the stack)</span>
 <span class="c1">// into &#39;curenv-&gt;env_tf&#39;, so that running the environment</span>
 <span class="c1">// will restart at the trap point.</span>
 <span class="c1">// now, the code is running in kernel mode, but curenv is not </span>
@@ -377,7 +375,7 @@ Z's Thoughts            </a>
 <p>记住这句话：<strong>大道理谁都懂，魔鬼在细节！</strong> 在写kernel的代码的时候，要考到到各种输入的corner case。</p>
 <h4>sys_exofork 的实现</h4>
 <p>sys_exofork 的作用就是alloc 一个新的env，这个env 调用系统调用的孩子(curenv 就是调用这个系统调用的env)。同时将son env的寄存器的值初始化为parent env的值，这样相当于son env 也是执行到这里的，只不过son env的status 是 ENV_NOT_RUNNABLE，因为还没有初始化页表什么的，所以还是不能运行的。对于函数的返回值，如果是parent env，那么返回son env 的id，如果是son env，那么返回0。如何区分这个呢？想到系统调用的返回值是记录在trapframe 的eax寄存器中，所以，注意对son env的寄存器初始化的时候，要将son env 的eax寄存器初始化为0。</p>
-<div class="highlight"><pre><span class="k">static</span> <span class="kt">envid_t</span>
+<div class="highlight"><pre><span></span><span class="k">static</span> <span class="n">envid_t</span>
 <span class="nf">sys_exofork</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span><span class="n">newenv</span><span class="p">;</span>
@@ -405,8 +403,8 @@ Z's Thoughts            </a>
 <li>envid 需要是curenv 的son。通过envid2env检查。</li>
 <li>status 只能是 ENV_RUNNABLE 或者 ENV_NOT_RUNNABLE，因为这个系统调用是配合sys_exofork的。</li>
 </ul>
-<div class="highlight"><pre><span class="k">static</span> <span class="kt">int</span>
-<span class="nf">sys_env_set_status</span><span class="p">(</span><span class="kt">envid_t</span> <span class="n">envid</span><span class="p">,</span> <span class="kt">int</span> <span class="n">status</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><span class="k">static</span> <span class="kt">int</span>
+<span class="nf">sys_env_set_status</span><span class="p">(</span><span class="n">envid_t</span> <span class="n">envid</span><span class="p">,</span> <span class="kt">int</span> <span class="n">status</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="kt">int</span> <span class="n">ret</span><span class="p">;</span>
   <span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span> <span class="n">son_env</span><span class="p">;</span>
@@ -436,8 +434,8 @@ Z's Thoughts            </a>
 <li>如果插入pte失败，记得把分配的物理页回收。</li>
 </ul>
 <p>因为这个系统调用实现的时候，先page_alloc，分配一个新的PageInfo，然后将这个PageInfo page_insert到va上，一个副作用就是如果va对应的PageInfo存在，那么之前的PageInfo就会被unmap掉。</p>
-<div class="highlight"><pre><span class="k">static</span> <span class="kt">int</span>
-<span class="nf">sys_page_alloc</span><span class="p">(</span><span class="kt">envid_t</span> <span class="n">envid</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">va</span><span class="p">,</span> <span class="kt">int</span> <span class="n">perm</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><span class="k">static</span> <span class="kt">int</span>
+<span class="nf">sys_page_alloc</span><span class="p">(</span><span class="n">envid_t</span> <span class="n">envid</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">va</span><span class="p">,</span> <span class="kt">int</span> <span class="n">perm</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="kt">int</span> <span class="n">ret</span><span class="p">;</span>
   <span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span> <span class="n">env</span><span class="p">;</span>
@@ -479,14 +477,14 @@ Z's Thoughts            </a>
 <li>凡是涉及到虚拟地址空间的，创建这个va的page的时候，注意这个va是否已经被占用了。</li>
 <li>凡是涉及到页表权限FLAG的，都要检查user是否有这个权限设置这个FLAG。</li>
 </ul>
-<div class="highlight"><pre><span class="k">static</span> <span class="kt">int</span>
-<span class="nf">sys_page_map</span><span class="p">(</span><span class="kt">envid_t</span> <span class="n">srcenvid</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">srcva</span><span class="p">,</span>
-       <span class="kt">envid_t</span> <span class="n">dstenvid</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">dstva</span><span class="p">,</span> <span class="kt">int</span> <span class="n">perm</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><span class="k">static</span> <span class="kt">int</span>
+<span class="nf">sys_page_map</span><span class="p">(</span><span class="n">envid_t</span> <span class="n">srcenvid</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">srcva</span><span class="p">,</span>
+       <span class="n">envid_t</span> <span class="n">dstenvid</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">dstva</span><span class="p">,</span> <span class="kt">int</span> <span class="n">perm</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span><span class="n">srcenv</span><span class="p">,</span> <span class="o">*</span><span class="n">dstenv</span><span class="p">;</span>
   <span class="kt">int</span> <span class="n">ret</span><span class="p">;</span>
   <span class="k">struct</span> <span class="n">PageInfo</span> <span class="o">*</span> <span class="n">pp</span><span class="p">;</span>
-  <span class="kt">pte_t</span> <span class="o">*</span> <span class="n">src_pte</span><span class="p">;</span>
+  <span class="n">pte_t</span> <span class="o">*</span> <span class="n">src_pte</span><span class="p">;</span>
 
   <span class="c1">// check srcenvid and dstenvid</span>
   <span class="k">if</span> <span class="p">((</span><span class="n">ret</span> <span class="o">=</span> <span class="n">envid2env</span><span class="p">(</span><span class="n">srcenvid</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">srcenv</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>
@@ -518,8 +516,8 @@ Z's Thoughts            </a>
 
 <h4>sys_page_unmap 的实现</h4>
 <p>sys_page_unmap的功能就是释放envid对应的虚拟地址空间va。注意检查参数。</p>
-<div class="highlight"><pre><span class="k">static</span> <span class="kt">int</span>
-<span class="nf">sys_page_unmap</span><span class="p">(</span><span class="kt">envid_t</span> <span class="n">envid</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">va</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><span class="k">static</span> <span class="kt">int</span>
+<span class="nf">sys_page_unmap</span><span class="p">(</span><span class="n">envid_t</span> <span class="n">envid</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">va</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="kt">int</span> <span class="n">ret</span><span class="p">;</span>
   <span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span><span class="n">env</span><span class="p">;</span>
@@ -541,11 +539,11 @@ Z's Thoughts            </a>
 
 <h3>利用刚刚完成的系统调用在用户态实现简单的 fork</h3>
 <p>在user/dumbfork.c 中实现的dumbfork，没有实现COW，过程如下:</p>
-<div class="highlight"><pre><span class="c1">// 这段代码是user的代码，在user态执行。</span>
-<span class="kt">envid_t</span>
+<div class="highlight"><pre><span></span><span class="c1">// 这段代码是user的代码，在user态执行。</span>
+<span class="n">envid_t</span>
 <span class="nf">dumbfork</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
 <span class="p">{</span>
-  <span class="kt">envid_t</span> <span class="n">envid</span><span class="p">;</span>
+  <span class="n">envid_t</span> <span class="n">envid</span><span class="p">;</span>
   <span class="kt">uint8_t</span> <span class="o">*</span><span class="n">addr</span><span class="p">;</span>
   <span class="kt">int</span> <span class="n">r</span><span class="p">;</span>
   <span class="k">extern</span> <span class="kt">unsigned</span> <span class="kt">char</span> <span class="n">end</span><span class="p">[];</span>
@@ -603,10 +601,10 @@ Z's Thoughts            </a>
 <li>通过memmove，将parent env 中的va对应的内容复制到 tmpva上。</li>
 <li>在parent env中sys_page_unmap 自己的tmpva。这样tmpva对应的物理页的refcount 就是1了，是son va引用的。</li>
 </ol>
-<div class="highlight"><pre><span class="c1">// 这段代码是user的，在user态执行。</span>
+<div class="highlight"><pre><span></span><span class="c1">// 这段代码是user的，在user态执行。</span>
 <span class="c1">// dup当前env的 addr 到 destenv的addr 上。</span>
 <span class="kt">void</span>
-<span class="nf">duppage</span><span class="p">(</span><span class="kt">envid_t</span> <span class="n">dstenv</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">addr</span><span class="p">)</span>
+<span class="nf">duppage</span><span class="p">(</span><span class="n">envid_t</span> <span class="n">dstenv</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">addr</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="kt">int</span> <span class="n">r</span><span class="p">;</span>
 

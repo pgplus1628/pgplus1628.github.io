@@ -1,12 +1,56 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Z's Thoughts</title><link href="http://zorksylar.github.io/" rel="alternate"></link><link href="http://zorksylar.github.io/feeds/blog.atom.xml" rel="self"></link><id>http://zorksylar.github.io/</id><updated>2016-02-17T00:00:00+08:00</updated><entry><title>Implementing Event Polling in Multi-Thread Environment with eventfd and epoll</title><link href="http://zorksylar.github.io/epoll-eventfd.html" rel="alternate"></link><updated>2016-02-17T00:00:00+08:00</updated><author><name>zorksylar</name></author><id>tag:zorksylar.github.io,2016-02-17:epoll-eventfd.html</id><summary type="html">&lt;h3&gt;Poll/Notify Thread Synchronization Model in Multi-Thread Environment&lt;/h3&gt;
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Z's Thoughts</title><link href="http://zorksylar.github.io/" rel="alternate"></link><link href="http://zorksylar.github.io/feeds/blog.atom.xml" rel="self"></link><id>http://zorksylar.github.io/</id><updated>2016-03-20T00:00:00+08:00</updated><entry><title>Mapping Continuous Virtual Address to NUMA Nodes</title><link href="http://zorksylar.github.io/numa-mmap.html" rel="alternate"></link><updated>2016-03-20T00:00:00+08:00</updated><author><name>zorksylar</name></author><id>tag:zorksylar.github.io,2016-03-20:numa-mmap.html</id><summary type="html">&lt;h3&gt;Background and Issues&lt;/h3&gt;
+&lt;p&gt;Nowadays, NUMA(Non-Uniform Memory Access) processor is common in data-center. In NUMA architecture, different CPU has its local memory and they are interconnected by QPI(Quick Path Interconnect). A processor can access its local memory faster than non-local memory.&lt;/p&gt;
+&lt;p&gt;Distribute datasets among NUMA nodes is one of the optimizations used to improve application performance. Considering that there is an array, and it is shared between &lt;em&gt;N&lt;/em&gt; NUMA nodes. One way to map this array to NUMA nodes is to create &lt;em&gt;N&lt;/em&gt; pointers, each of them points to one partition of this array.&lt;/p&gt;
+&lt;p&gt;When accessing elements with the index in the original data. An extra address mapping as the following codes shows.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;shards&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;N&lt;/span&gt;&lt;span class="p"&gt;];&lt;/span&gt;  &lt;span class="c1"&gt;// start address of each data shards, its memory is allocated on corresponding NUMA nodes.&lt;/span&gt;
+&lt;span class="kt"&gt;size_t&lt;/span&gt; &lt;span class="n"&gt;shard_size&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="c1"&gt;// number of elements in each data shard&lt;/span&gt;
+
+&lt;span class="cm"&gt;/*&lt;/span&gt;
+&lt;span class="cm"&gt; * Get elements by given index from `data`.&lt;/span&gt;
+&lt;span class="cm"&gt; */&lt;/span&gt;
+&lt;span class="kr"&gt;inline&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="nf"&gt;get&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;size_t&lt;/span&gt; &lt;span class="n"&gt;idx&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+  &lt;span class="kt"&gt;size_t&lt;/span&gt; &lt;span class="n"&gt;shard_id&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;idx&lt;/span&gt; &lt;span class="o"&gt;/&lt;/span&gt; &lt;span class="n"&gt;shard_size&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+  &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;shards&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;shard_id&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;idx&lt;/span&gt; &lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="n"&gt;shard_size&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;;&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;This address mapping would introduce unnecessary overhead.&lt;/p&gt;
+&lt;p&gt;Don't forget &lt;strong&gt; The Operating System Already Provided Address Mapping Mechanism!!! &lt;/strong&gt;&lt;/p&gt;
+&lt;h3&gt;Mapping continuous virtual address to NUMA nodes&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;mmap + numa_tonode_memory&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;Remember memory allocation are &lt;strong&gt;LAZY&lt;/strong&gt;. Operating system does not assign actual pages of physical memory until the page is touched(write/read).&lt;/p&gt;
+&lt;p&gt;So, we can reserve a continuous virtual address by &lt;code&gt;mmap&lt;/code&gt; ANONYMOUS pages.
+Then, apply &lt;code&gt;numa_tonode_memory&lt;/code&gt; to bind virtual address shards to specific NUMA nodes.&lt;/p&gt;
+&lt;p&gt;NOTICE that these virtual addresses should be page aligned.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;  &lt;span class="kt"&gt;size_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;shard_size&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;N&lt;/span&gt;&lt;span class="p"&gt;];&lt;/span&gt; &lt;span class="c1"&gt;// number of elements in each shard&lt;/span&gt;
+  &lt;span class="kt"&gt;size_t&lt;/span&gt; &lt;span class="n"&gt;ele_bytes&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="c1"&gt;// bytes of each element&lt;/span&gt;
+  &lt;span class="c1"&gt;// codes to initialize shard_size and ele_bytes, make sure each shard is page aligned.&lt;/span&gt;
+  &lt;span class="p"&gt;...&lt;/span&gt;
+
+  &lt;span class="c1"&gt;// reserve virtual memory&lt;/span&gt;
+  &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;addr&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;mmap&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;NULL&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;tot_pages&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;PGSIZE&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;PROT_READ&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;PROT_WRITE&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;MAP_PRIVATE&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;MAP_ANONYMOUS&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
+  &lt;span class="n"&gt;CHECK&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;addr&lt;/span&gt; &lt;span class="o"&gt;!=&lt;/span&gt; &lt;span class="nb"&gt;NULL&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span class="s"&gt;&amp;quot;Failed to mmap pages.&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+
+  &lt;span class="c1"&gt;// put memory to NUMA nodes&lt;/span&gt;
+  &lt;span class="kt"&gt;size_t&lt;/span&gt; &lt;span class="n"&gt;offset&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+  &lt;span class="k"&gt;for&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;cpu&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="n"&gt;cpu&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="n"&gt;N&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="n"&gt;cpu&lt;/span&gt; &lt;span class="o"&gt;++&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+    &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pos&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="p"&gt;)((&lt;/span&gt;&lt;span class="kt"&gt;char&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;addr&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;offset&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;ele_bytes&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
+    &lt;span class="n"&gt;numa_tonode_memory&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pos&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ele_bytes&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;shard_size&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;cpu&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="n"&gt;cpu&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
+    &lt;span class="n"&gt;offset&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="n"&gt;ele_bytes&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;shard_size&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;cpu&lt;/span&gt;&lt;span class="p"&gt;];&lt;/span&gt;
+  &lt;span class="p"&gt;}&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;-- EOF --&lt;/p&gt;</summary><category term="[NUMA"></category><category term="mmap]"></category></entry><entry><title>Implementing Event Polling in Multi-Thread Environment with eventfd and epoll</title><link href="http://zorksylar.github.io/epoll-eventfd.html" rel="alternate"></link><updated>2016-02-17T00:00:00+08:00</updated><author><name>zorksylar</name></author><id>tag:zorksylar.github.io,2016-02-17:epoll-eventfd.html</id><summary type="html">&lt;h3&gt;Poll/Notify Thread Synchronization Model in Multi-Thread Environment&lt;/h3&gt;
 &lt;p&gt;In most cases, we need to implement thread synchronization mechanism in the following manner: There are &lt;em&gt;W&lt;/em&gt; &lt;strong&gt;Workers&lt;/strong&gt;, and each worker communicates with each other through message passing. There is a &lt;strong&gt;Coordinator&lt;/strong&gt; in each &lt;strong&gt;Worker&lt;/strong&gt;, which is in charge of message sending and dispatching. Specifically, &lt;strong&gt;Sender&lt;/strong&gt; and &lt;strong&gt;Receiver&lt;/strong&gt; in Coordinator are for message sending and receiving. When one message arrived, Receiver should trigger an event according to the content of this message, and pass this event to &lt;strong&gt;Worker&lt;/strong&gt; to do some user defined event handling.&lt;/p&gt;
 &lt;p&gt;Each Receiver maintains a &lt;strong&gt;channel&lt;/strong&gt;(message buffer) for each Sender. There are &lt;em&gt;W&lt;/em&gt; Workers, and there should be &lt;em&gt;W&lt;/em&gt; channels for each Receiver. In the Receiver side, a listening-thread is needed to poll on these channels. Mostly, we do not want to waste CPU cycles on the listening-thread. We need a &lt;strong&gt;Poll/Notify&lt;/strong&gt; mechanism to wake up the listening thread in Receiver when a channel is ready to read. I.E, when there is no channel available, the listening-thread should be blocked.&lt;/p&gt;
 &lt;p&gt;This model is useful in many cases, such as user-space network protocol implementation, and message passing between NUMA nodes(like this paper :&lt;em&gt;GraM: Scaling Graph Computation to the Trillions&lt;/em&gt; does).&lt;/p&gt;
 &lt;h3&gt;conditional variable V.S. eventfd V.S. sockets&lt;/h3&gt;
 &lt;p&gt;&lt;code&gt;pthread&lt;/code&gt; provides &lt;code&gt;conditional wait&lt;/code&gt; mechanism. Thread A wait for some event, and thread B can notify the threads that waiting on the event. This is the &lt;strong&gt;Wait/Notify&lt;/strong&gt; thread synchronization. One thread wait and the other thread notify. The limitation of &lt;code&gt;conditional wait&lt;/code&gt; is one thread can not wait on multiple condition variables.&lt;/p&gt;
 &lt;p&gt;&lt;code&gt;eventfd&lt;/code&gt; is introduced in Linux kernel after version 2.6.22.&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="cp"&gt;#include &amp;lt;sys/eventfd.h&amp;gt;&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="cp"&gt;#include&lt;/span&gt; &lt;span class="cpf"&gt;&amp;lt;sys/eventfd.h&amp;gt;&lt;/span&gt;&lt;span class="cp"&gt;&lt;/span&gt;
 &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="nf"&gt;eventfd&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;unsigned&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;initval&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;flags&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
 &lt;/pre&gt;&lt;/div&gt;
 
@@ -21,20 +65,20 @@
 &lt;p&gt;The Poll/Notify mechanism can be implemented with eventfd and epoll. For the Receiver, it only needs to create an eventfd for each channel, and add them to  epoll file descriptor. The listening thread &lt;code&gt;epoll_wait&lt;/code&gt; on the epoll file descriptor.&lt;/p&gt;
 &lt;p&gt;These codes can be found in &lt;a href="https://github.com/zorksylar/ZLab/tree/master/eventfd"&gt;Github&lt;/a&gt;&lt;/p&gt;
 &lt;p&gt;The Coordinator Implmentation :&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="c1"&gt;//&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="c1"&gt;//&lt;/span&gt;
 &lt;span class="c1"&gt;// Created by zorksylar on 2/16/16.&lt;/span&gt;
 &lt;span class="c1"&gt;//&lt;/span&gt;
 
 &lt;span class="cp"&gt;#pragma once&lt;/span&gt;
 
-&lt;span class="cp"&gt;#include &amp;lt;unistd.h&amp;gt;&lt;/span&gt;
-&lt;span class="cp"&gt;#include &amp;lt;pthread.h&amp;gt;&lt;/span&gt;
-&lt;span class="cp"&gt;#include &amp;lt;sys/time.h&amp;gt;&lt;/span&gt;
-&lt;span class="cp"&gt;#include &amp;lt;sys/eventfd.h&amp;gt;&lt;/span&gt;
-&lt;span class="cp"&gt;#include &amp;lt;sys/epoll.h&amp;gt;&lt;/span&gt;
-&lt;span class="cp"&gt;#include &amp;lt;glog/logging.h&amp;gt;&lt;/span&gt;
-&lt;span class="cp"&gt;#include &amp;lt;errno.h&amp;gt;&lt;/span&gt;
-&lt;span class="cp"&gt;#include &amp;lt;stdint.h&amp;gt;&lt;/span&gt;
+&lt;span class="cp"&gt;#include&lt;/span&gt; &lt;span class="cpf"&gt;&amp;lt;unistd.h&amp;gt;&lt;/span&gt;&lt;span class="cp"&gt;&lt;/span&gt;
+&lt;span class="cp"&gt;#include&lt;/span&gt; &lt;span class="cpf"&gt;&amp;lt;pthread.h&amp;gt;&lt;/span&gt;&lt;span class="cp"&gt;&lt;/span&gt;
+&lt;span class="cp"&gt;#include&lt;/span&gt; &lt;span class="cpf"&gt;&amp;lt;sys/time.h&amp;gt;&lt;/span&gt;&lt;span class="cp"&gt;&lt;/span&gt;
+&lt;span class="cp"&gt;#include&lt;/span&gt; &lt;span class="cpf"&gt;&amp;lt;sys/eventfd.h&amp;gt;&lt;/span&gt;&lt;span class="cp"&gt;&lt;/span&gt;
+&lt;span class="cp"&gt;#include&lt;/span&gt; &lt;span class="cpf"&gt;&amp;lt;sys/epoll.h&amp;gt;&lt;/span&gt;&lt;span class="cp"&gt;&lt;/span&gt;
+&lt;span class="cp"&gt;#include&lt;/span&gt; &lt;span class="cpf"&gt;&amp;lt;glog/logging.h&amp;gt;&lt;/span&gt;&lt;span class="cp"&gt;&lt;/span&gt;
+&lt;span class="cp"&gt;#include&lt;/span&gt; &lt;span class="cpf"&gt;&amp;lt;errno.h&amp;gt;&lt;/span&gt;&lt;span class="cp"&gt;&lt;/span&gt;
+&lt;span class="cp"&gt;#include&lt;/span&gt; &lt;span class="cpf"&gt;&amp;lt;stdint.h&amp;gt;&lt;/span&gt;&lt;span class="cp"&gt;&lt;/span&gt;
 
 
 &lt;span class="cp"&gt;#define EPOLL_WAIT_TIMEOUT (1000) &lt;/span&gt;&lt;span class="c1"&gt;// 1.0 second&lt;/span&gt;
@@ -53,7 +97,7 @@
 
 &lt;span class="k"&gt;public&lt;/span&gt; &lt;span class="o"&gt;:&lt;/span&gt;
     &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;chan_fds&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="c1"&gt;// event fds of this channel&lt;/span&gt;
-    &lt;span class="kt"&gt;pthread_t&lt;/span&gt; &lt;span class="n"&gt;listener&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="n"&gt;pthread_t&lt;/span&gt; &lt;span class="n"&gt;listener&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
 
     &lt;span class="n"&gt;Receiver&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;kclients&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;id&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;:&lt;/span&gt; &lt;span class="n"&gt;kclient_&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;kclients&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="n"&gt;id_&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;id&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
         &lt;span class="n"&gt;chan_fds&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="k"&gt;new&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;kclient_&lt;/span&gt;&lt;span class="p"&gt;];&lt;/span&gt;
@@ -182,9 +226,9 @@
 
 
 &lt;p&gt;Main.cpp&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="cp"&gt;#include &amp;quot;coordinator.hpp&amp;quot;&lt;/span&gt;
-&lt;span class="cp"&gt;#include &amp;lt;pthread.h&amp;gt;&lt;/span&gt;
-&lt;span class="cp"&gt;#include &amp;lt;glog/logging.h&amp;gt;&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="cp"&gt;#include&lt;/span&gt; &lt;span class="cpf"&gt;&amp;quot;coordinator.hpp&amp;quot;&lt;/span&gt;&lt;span class="cp"&gt;&lt;/span&gt;
+&lt;span class="cp"&gt;#include&lt;/span&gt; &lt;span class="cpf"&gt;&amp;lt;pthread.h&amp;gt;&lt;/span&gt;&lt;span class="cp"&gt;&lt;/span&gt;
+&lt;span class="cp"&gt;#include&lt;/span&gt; &lt;span class="cpf"&gt;&amp;lt;glog/logging.h&amp;gt;&lt;/span&gt;&lt;span class="cp"&gt;&lt;/span&gt;
 
 &lt;span class="cp"&gt;#define NNODE (8)&lt;/span&gt;
 
@@ -229,7 +273,7 @@
 
 
     &lt;span class="c1"&gt;// start senders&lt;/span&gt;
-    &lt;span class="kt"&gt;pthread_t&lt;/span&gt; &lt;span class="n"&gt;senders&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;NNODE&lt;/span&gt;&lt;span class="p"&gt;];&lt;/span&gt;
+    &lt;span class="n"&gt;pthread_t&lt;/span&gt; &lt;span class="n"&gt;senders&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;NNODE&lt;/span&gt;&lt;span class="p"&gt;];&lt;/span&gt;
     &lt;span class="k"&gt;for&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="n"&gt;NNODE&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;++&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
         &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;TXArgs&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;sarg&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;TXArgs&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;malloc&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;sizeof&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;TXArgs&lt;/span&gt;&lt;span class="p"&gt;));&lt;/span&gt;
         &lt;span class="n"&gt;sarg&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;tx&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;txs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;];&lt;/span&gt;
@@ -260,7 +304,7 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 &lt;li&gt;对于Trap，不会修改&lt;code&gt;IF&lt;/code&gt;标志位。&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;在JOS中，通过SETGATE中的istrap可以设置。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="cp"&gt;#define STS_CG32  0xC     &lt;/span&gt;&lt;span class="c1"&gt;// 32-bit Call Gate&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="cp"&gt;#define STS_CG32  0xC     &lt;/span&gt;&lt;span class="c1"&gt;// 32-bit Call Gate&lt;/span&gt;
 &lt;span class="cp"&gt;#define STS_IG32  0xE     &lt;/span&gt;&lt;span class="c1"&gt;// 32-bit Interrupt Gate&lt;/span&gt;
 &lt;span class="cp"&gt;#define STS_TG32  0xF     &lt;/span&gt;&lt;span class="c1"&gt;// 32-bit Trap Gate&lt;/span&gt;
 
@@ -295,7 +339,7 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 
 &lt;h4&gt;Exercise 13&lt;/h4&gt;
 &lt;p&gt;初始化IDT使得JOS能够handle外部中断。在&lt;code&gt;kern/trapentry.S&lt;/code&gt;中添加相应的条目，同时在&lt;code&gt;kern/trap.c&lt;/code&gt;中初始化interrupt gate, 注意在SETGATE的时候，istrap要置位0表示这是一个Interrupt，在进入内核态之后，外部中断被禁止。同时在&lt;code&gt;kern/env.c&lt;/code&gt;中的&lt;code&gt;env_alloc&lt;/code&gt;中初始化eflags。当在进入trap的时候，保存进程的&lt;code&gt;trapframe&lt;/code&gt;，其中包含&lt;code&gt;eflags&lt;/code&gt;，这样在中断处理结束之后，从内核态转到用户态的时候，通过&lt;code&gt;trapframe&lt;/code&gt;恢复&lt;code&gt;eflags&lt;/code&gt;，这样就保证了在恢复到用户态的时候，允许外部中断。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="c1"&gt;// Enable interrupts while in user mode.&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="c1"&gt;// Enable interrupts while in user mode.&lt;/span&gt;
 &lt;span class="c1"&gt;// LAB 4: Your code here.&lt;/span&gt;
 &lt;span class="c1"&gt;// Set FL_IF, so when return in user mode, eflags will be enabled.&lt;/span&gt;
 &lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;env_tf&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;tf_eflags&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;env_tf&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;tf_eflags&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;FL_IF&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -304,7 +348,7 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 
 &lt;h4&gt;Exercise 14&lt;/h4&gt;
 &lt;p&gt;为了能够让kernel拿到CPU的控制权，需要每隔一段时间差生一个外部中断，在内核初始化的时候，通过调用&lt;code&gt;lapic_init&lt;/code&gt;和&lt;code&gt;pic_init&lt;/code&gt;设置好了硬件会每隔一段时间产生外部中断，这个Exercise要做的就是在产生中断的时候，通过IDT找到中断处理函数，让内核拿到CPU的控制权，调度其他进程。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="c1"&gt;// Handle clock interrupts. Don&amp;#39;t forget to acknowledge the&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="c1"&gt;// Handle clock interrupts. Don&amp;#39;t forget to acknowledge the&lt;/span&gt;
 &lt;span class="c1"&gt;// interrupt using lapic_eoi() before calling the scheduler!&lt;/span&gt;
 &lt;span class="c1"&gt;// LAB 4: Your code here.&lt;/span&gt;
 &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;tf&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;tf_trapno&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="n"&gt;IRQ_OFFSET&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;IRQ_TIMER&lt;/span&gt;&lt;span class="p"&gt;){&lt;/span&gt;
@@ -326,18 +370,18 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 &lt;h4&gt;Exercise 15&lt;/h4&gt;
 &lt;p&gt;IPC传送的消息包含两部分：32 bit value 和 single page mapping。 page mapping 作为消息的一部，可以实现任意两个进程共享一块内存，同时，如果传送的消息比较大，可以通过page mapping 实现消息传送。 &lt;br /&gt;
 为了实现IPC，在&lt;code&gt;struct Env&lt;/code&gt;中，多出了以下字段：&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="c1"&gt;// Lab 4 IPC&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="c1"&gt;// Lab 4 IPC&lt;/span&gt;
 &lt;span class="kt"&gt;bool&lt;/span&gt; &lt;span class="n"&gt;env_ipc_recving&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;   &lt;span class="c1"&gt;// Env is blocked receiving，表示env等待消息中。如果env_ipc_recving位false，那么任何发送进程都不能将消息发送到这个env中。&lt;/span&gt;
 &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;env_ipc_dstva&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;    &lt;span class="c1"&gt;// VA at which to map received page. 消息中的page mapping 部分&lt;/span&gt;
 &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;env_ipc_value&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;   &lt;span class="c1"&gt;// Data value sent to us, 消息中的 32bit value 部分&lt;/span&gt;
-&lt;span class="kt"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;env_ipc_from&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;   &lt;span class="c1"&gt;// envid of the sender,如果收到消息，记录消息的发送者&lt;/span&gt;
+&lt;span class="n"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;env_ipc_from&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;   &lt;span class="c1"&gt;// envid of the sender,如果收到消息，记录消息的发送者&lt;/span&gt;
 &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;env_ipc_perm&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;   &lt;span class="c1"&gt;// Perm of page mapping received, 消息中的page mapping 部分&lt;/span&gt;
 &lt;/pre&gt;&lt;/div&gt;
 
 
 &lt;p&gt;注意在&lt;code&gt;env_alloc&lt;/code&gt;中，初始化对应的&lt;code&gt;struct Env&lt;/code&gt;字段。&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;sys_ipc_recv&lt;/strong&gt; : 进程通过调用这个系统调用，实现接受消息。当进程调用这个系统调用的时候，内核会阻塞这个进程，将env的状态设置位&lt;code&gt;ENV_NOT_RUNNABLE&lt;/code&gt;，直到接受到任何进程发送的消息为止，这个进程才能得到调度。注意，对发送消息的进程没有parent 进程的限制，任何进程都能发送消息给任何进程(在JOS中)。注意对参数的检查。如果不接受传递的page mapping，只需要将&lt;code&gt;dstva&lt;/code&gt;置为&lt;code&gt;UTOP&lt;/code&gt;就可以了， &lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="c1"&gt;// Block until a value is ready.  Record that you want to receive&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="c1"&gt;// Block until a value is ready.  Record that you want to receive&lt;/span&gt;
 &lt;span class="c1"&gt;// using the env_ipc_recving and env_ipc_dstva fields of struct Env,&lt;/span&gt;
 &lt;span class="c1"&gt;// mark yourself not runnable, and then give up the CPU.&lt;/span&gt;
 &lt;span class="c1"&gt;//&lt;/span&gt;
@@ -371,13 +415,13 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 
 
 &lt;p&gt;&lt;strong&gt;sys_ipc_try_send&lt;/strong&gt; : 检查参数，同时传递32bit value 和 page mapping。这里有个trick，因为srcva的范围必须在&lt;code&gt;UTOP&lt;/code&gt;之下，所以如何判断是否进行page mapping 呢？只要传递srcva &amp;gt;= UTOP 就可以了，只要让系统调用对这种情况不做处理，不抛出&lt;code&gt;-E_INVAL&lt;/code&gt;。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt;
-&lt;span class="nf"&gt;sys_ipc_try_send&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;envid&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;value&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;srcva&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;unsigned&lt;/span&gt; &lt;span class="n"&gt;perm&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt;
+&lt;span class="nf"&gt;sys_ipc_try_send&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;envid&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;value&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;srcva&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;unsigned&lt;/span&gt; &lt;span class="n"&gt;perm&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="c1"&gt;// LAB 4: Your code here.&lt;/span&gt;
   &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;dstenv&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-  &lt;span class="kt"&gt;pte_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;pte&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+  &lt;span class="n"&gt;pte_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;pte&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;PageInfo&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pp&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="c1"&gt;// Check parameters&lt;/span&gt;
   &lt;span class="c1"&gt;// Check envid and env status&lt;/span&gt;
@@ -432,7 +476,7 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 
 &lt;p&gt;&lt;strong&gt;lib 库对ipc的包装&lt;/strong&gt; &lt;br /&gt;
 &lt;strong&gt;ipc_recv&lt;/strong&gt; : 如果不需要page mapping，那么在系统调用的时候，&lt;code&gt;dstva&lt;/code&gt;传递&lt;code&gt;UTOP&lt;/code&gt;。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="c1"&gt;// Receive a value via IPC and return it.&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="c1"&gt;// Receive a value via IPC and return it.&lt;/span&gt;
 &lt;span class="c1"&gt;// If &amp;#39;pg&amp;#39; is nonnull, then any page sent by the sender will be mapped at&lt;/span&gt;
 &lt;span class="c1"&gt;//  that address.&lt;/span&gt;
 &lt;span class="c1"&gt;// If &amp;#39;from_env_store&amp;#39; is nonnull, then store the IPC sender&amp;#39;s envid in&lt;/span&gt;
@@ -450,7 +494,7 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 &lt;span class="c1"&gt;//   as meaning &amp;quot;no page&amp;quot;.  (Zero is not the right value, since that&amp;#39;s&lt;/span&gt;
 &lt;span class="c1"&gt;//   a perfectly valid place to map a page.)&lt;/span&gt;
 &lt;span class="kt"&gt;int32_t&lt;/span&gt;
-&lt;span class="nf"&gt;ipc_recv&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;envid_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;from_env_store&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pg&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;perm_store&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="nf"&gt;ipc_recv&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;envid_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;from_env_store&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pg&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;perm_store&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="c1"&gt;// LAB 4: Your code here.&lt;/span&gt;
   &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -482,7 +526,7 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 
 
 &lt;p&gt;&lt;strong&gt;ipc_send&lt;/strong&gt; : 如果返回&lt;code&gt;-E_IPC_NOT_RECV&lt;/code&gt;，表示接受消息的进程还没有&lt;code&gt;struct Env&lt;/code&gt;中的&lt;code&gt;env_ipc_recving&lt;/code&gt;，需要继续try。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="c1"&gt;// Send &amp;#39;val&amp;#39; (and &amp;#39;pg&amp;#39; with &amp;#39;perm&amp;#39;, if &amp;#39;pg&amp;#39; is nonnull) to &amp;#39;toenv&amp;#39;.&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="c1"&gt;// Send &amp;#39;val&amp;#39; (and &amp;#39;pg&amp;#39; with &amp;#39;perm&amp;#39;, if &amp;#39;pg&amp;#39; is nonnull) to &amp;#39;toenv&amp;#39;.&lt;/span&gt;
 &lt;span class="c1"&gt;// This function keeps trying until it succeeds.&lt;/span&gt;
 &lt;span class="c1"&gt;// It should panic() on any error other than -E_IPC_NOT_RECV.&lt;/span&gt;
 &lt;span class="c1"&gt;//&lt;/span&gt;
@@ -491,7 +535,7 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 &lt;span class="c1"&gt;//   If &amp;#39;pg&amp;#39; is null, pass sys_ipc_recv a value that it will understand&lt;/span&gt;
 &lt;span class="c1"&gt;//   as meaning &amp;quot;no page&amp;quot;.  (Zero is not the right value.)&lt;/span&gt;
 &lt;span class="kt"&gt;void&lt;/span&gt;
-&lt;span class="nf"&gt;ipc_send&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;to_env&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;val&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pg&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;perm&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="nf"&gt;ipc_send&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;to_env&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;val&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pg&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;perm&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="c1"&gt;// LAB 4: Your code here.&lt;/span&gt;
   &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;E_IPC_NOT_RECV&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -536,8 +580,8 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 &lt;/blockquote&gt;
 &lt;h4&gt;Exercise 8&lt;/h4&gt;
 &lt;p&gt;实现 sys_env_set_pgfault_upcall 系统调用，user 注册upcall函数，在lab4中，struct Env 中添加成员 env_pgfault_upcall，用于记录用户注册的upcall函数在user地址空间的地址。注意各种参数检查。   &lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt;
-&lt;span class="nf"&gt;sys_env_set_pgfault_upcall&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;envid&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;func&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt;
+&lt;span class="nf"&gt;sys_env_set_pgfault_upcall&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;envid&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;func&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;ret&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;env&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -569,7 +613,7 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 &lt;li&gt;normal user stack : user正常执行使用的栈。 &lt;/li&gt;
 &lt;li&gt;exception stack : 在产生一个中断之后，user执行user注册的中断函数的栈。&lt;/li&gt;
 &lt;/ul&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="cm"&gt;/*&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="cm"&gt;/*&lt;/span&gt;
 &lt;span class="cm"&gt; * UTOP,UENVS ------&amp;gt;  +------------------------------+ 0xeec00000&lt;/span&gt;
 &lt;span class="cm"&gt; * UXSTACKTOP -/       |     User Exception Stack     | RW/RW  PGSIZE&lt;/span&gt;
 &lt;span class="cm"&gt; *                     +------------------------------+ 0xeebff000&lt;/span&gt;
@@ -598,7 +642,7 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 &lt;h4&gt;Exercise 9&lt;/h4&gt;
 &lt;p&gt;实现page_fault_handler函数，如果user注册了upcall函数，那么建立upcall函数的UTrapframe，使得当返回到user态执行的时候，在UXSTACK上执行user的upcall(UTrapframe)。&lt;/p&gt;
 &lt;p&gt;Utrapframe中，保存了在trap的时候，user env的状态，使得能够当upcall函数执行结束之后，返回到在trap之前的执行状态。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;UTrapframe&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;UTrapframe&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="cm"&gt;/* information about the fault */&lt;/span&gt;
   &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;utf_fault_va&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;  &lt;span class="cm"&gt;/* va for T_PGFLT, 0 otherwise */&lt;/span&gt;
   &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;utf_err&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -635,7 +679,7 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 &lt;li&gt;如果trap之前，env是执行在normal user stack上，那么直接在UXTSTACKTOP上插入UTrapframe。&lt;/li&gt;
 &lt;li&gt;如果trap之前，env是执行在exception stack上，那么需要在UXSTACK上push UTrapframe之前，要先push 32bit的空值。为什么这样做后面会看到。&lt;/li&gt;
 &lt;/ul&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;page_fault_handler&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Trapframe&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;tf&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;fault_va&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -716,7 +760,7 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 &lt;li&gt;如果trap之前，是执行在exception stack上，那么trap-time-eip位置在Utrapframe之间留出的 4B 上。&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;这样，在恢复trap-time-esp的时候，第一个弹出的一定是trap-time-eip。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;text&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;text&lt;/span&gt;
 &lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;globl&lt;/span&gt; &lt;span class="n"&gt;_pgfault_upcall&lt;/span&gt;
 &lt;span class="nl"&gt;_pgfault_upcall&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
   &lt;span class="c1"&gt;// Call the C page fault handler.&lt;/span&gt;
@@ -824,7 +868,7 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 
 &lt;h4&gt;Exercise 11&lt;/h4&gt;
 &lt;p&gt;实现lib对set_pgfault_handler的包装。handler是用户输入的upcall函数，_pgfault_upcall是lib包装的函数。   &lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;set_pgfault_handler&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;handler&lt;/span&gt;&lt;span class="p"&gt;)(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;UTrapframe&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;utf&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -851,7 +895,7 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 &lt;h4&gt;Something need to know&lt;/h4&gt;
 &lt;p&gt;JOS页表涉及的一个trick：
 在kern/init.c 中mem_init()的时候，初始化kern_pgdir有这样一行:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="cm"&gt;/* 关于UVPT, PTSIZE = (PGSIZE*NPTENTRIES)&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="cm"&gt;/* 关于UVPT, PTSIZE = (PGSIZE*NPTENTRIES)&lt;/span&gt;
 &lt;span class="cm"&gt; * ULIM, MMIOBASE --&amp;gt;  +------------------------------+ 0xef800000&lt;/span&gt;
 &lt;span class="cm"&gt; *                     |  Cur. Page Table (User R-)   | R-/R-  PTSIZE&lt;/span&gt;
 &lt;span class="cm"&gt; *    UVPT      ----&amp;gt;  +------------------------------+ 0xef400000&lt;/span&gt;
@@ -867,7 +911,7 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 
 
 &lt;p&gt;在env_setup_vm 的时候，复制了kern_pgdir中初始化的一部分page_dir( &amp;gt; UTOP),同时将UVPT这个虚拟地址指向了env_pgdir。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="n"&gt;memmove&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;env_pgdir&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;kern_pgdir&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;PGSIZE&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="n"&gt;memmove&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;env_pgdir&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;kern_pgdir&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;PGSIZE&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
 &lt;span class="c1"&gt;// UVPT maps the env&amp;#39;s own page table read-only.&lt;/span&gt;
 &lt;span class="c1"&gt;// Permissions: kernel R, user R&lt;/span&gt;
 &lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;env_pgdir&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;PDX&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;UVPT&lt;/span&gt;&lt;span class="p"&gt;)]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;PADDR&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;env_pgdir&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;PTE_P&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;PTE_U&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;  &lt;span class="c1"&gt;// (1)&lt;/span&gt;
@@ -875,7 +919,7 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 
 
 &lt;p&gt;在lib/entry.S中定义了如下几个全局变量：&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;data&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;data&lt;/span&gt;
 &lt;span class="c1"&gt;// Define the global symbols &amp;#39;envs&amp;#39;, &amp;#39;pages&amp;#39;, &amp;#39;uvpt&amp;#39;, and &amp;#39;uvpd&amp;#39;&lt;/span&gt;
 &lt;span class="c1"&gt;// so that they can be used in C as if they were ordinary global arrays.&lt;/span&gt;
   &lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;globl&lt;/span&gt; &lt;span class="n"&gt;envs&lt;/span&gt;
@@ -897,7 +941,7 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;为什么 uvpt[PGNUM(va)]就是 va对应的pte的内容？&lt;/strong&gt; &lt;br /&gt;
 首先，&lt;code&gt;uvpt[PGNUM(va)] = uvpt + PGNUM(va) * sizeof(uvpt)&lt;/code&gt;， 因为uvpt 是 pte_t* 类型的，所以 &lt;br /&gt;
 &lt;code&gt;uvpt[PGNUM(va)] = uvpt + PGNUM(va)&amp;lt;&amp;lt;2&lt;/code&gt;，&lt;code&gt;uvpt = 0xEF40000&lt;/code&gt;，也就是说低22位都是0。   &lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;31            22|21             12 | 11       2| 1 0 | 
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;31            22|21             12 | 11       2| 1 0 | 
    PDX(UVPT)    |    PDX(va)       |  PTX(va)  |     |
       a1        |        a2        |     a3    |     |
 &lt;/pre&gt;&lt;/div&gt;
@@ -912,7 +956,7 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;为什么 uvpd这个虚拟地址指向的就是env_pgdir的物理页？&lt;/strong&gt; &lt;br /&gt;
 &lt;code&gt;UVPT+(UVPT&amp;gt;&amp;gt;12)*4&lt;/code&gt;和&lt;code&gt;UVPT+(UVPT&amp;gt;&amp;gt;10)&lt;/code&gt;的区别是:前者能够将第10，11位清零。  &lt;br /&gt;
 uvpd 的值就是:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;31            22|21             12 | 11         0 | 
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;31            22|21             12 | 11         0 | 
    PDX(UVPT)    |    PDX(UVPT)     |       0      |
       a1        |        a2        |              |
 &lt;/pre&gt;&lt;/div&gt;
@@ -928,9 +972,9 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;h4&gt;Exercise 12&lt;/h4&gt;
 &lt;p&gt;实现 COW fork，当fork的时候调用duppage将PTE设置为COW，如果当写一个COW的页的时候，产生PGFLT，通过pgfault函数实现COW。 &lt;br /&gt;
 注意检查pde是否是PTE_P的。记得把parent env 的page 也设为 PTE_COW, 相当于清除PTE_W，PTE_COW 是software defined。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="c1"&gt;// lib/fork.c&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="c1"&gt;// lib/fork.c&lt;/span&gt;
 &lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt;
-&lt;span class="nf"&gt;duppage&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;envid&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;unsigned&lt;/span&gt; &lt;span class="n"&gt;pn&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="nf"&gt;duppage&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;envid&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;unsigned&lt;/span&gt; &lt;span class="n"&gt;pn&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;va&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pn&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span class="n"&gt;PGSHIFT&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
@@ -965,7 +1009,7 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;li&gt;&lt;code&gt;page_map(env_tmp_va, va)&lt;/code&gt;&lt;/li&gt;
 &lt;li&gt;&lt;code&gt;page_ummap(env_tmp_va)&lt;/code&gt;&lt;/li&gt;
 &lt;/ol&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;pgfault&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;UTrapframe&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;utf&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;addr&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;utf&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;utf_fault_va&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -1002,10 +1046,10 @@ uvpd 的值就是:&lt;/p&gt;
 
 
 &lt;p&gt;所以fork就成这样了&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="kt"&gt;envid_t&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="n"&gt;envid_t&lt;/span&gt;
 &lt;span class="nf"&gt;fork&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
-  &lt;span class="kt"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;envid&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+  &lt;span class="n"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;envid&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="kt"&gt;uintptr_t&lt;/span&gt; &lt;span class="n"&gt;va&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
 
@@ -1084,8 +1128,8 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;p&gt;一个CPU通过MMIO访问对应的LAPIC。MMIO (Memory Mapped IO) : 将物理地址映射到一些IO设备的寄存器，这样通过对这些个物理地址的load/store操作，就相当于对这些寄存器进行了访问。(在之前的Lab里面，page_init()的时候，留出了IO hole，就是为了这里MMIO)。&lt;/p&gt;
 &lt;h4&gt;Exercise 1&lt;/h4&gt;
 &lt;p&gt;为 APIC 需要MMIO访问的地址分配空间。给出MMIO 的 pa 和 len，返回访问这个 pa 的 va。通过boot_map_region函数实现。注意对齐和检测地址溢出。因为这块内存不是普通的内存，所以安全起见，需要对这块内存不做缓存处理，所以PTE_PCD | PTE_PWT | PTE_W。 PTE_PCD 表示 page cache disabled, PTE_PWT 表示 page write through.&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;
-&lt;span class="nf"&gt;mmio_map_region&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;physaddr_t&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;size_t&lt;/span&gt; &lt;span class="n"&gt;size&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;
+&lt;span class="nf"&gt;mmio_map_region&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;physaddr_t&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;size_t&lt;/span&gt; &lt;span class="n"&gt;size&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;ret&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="n"&gt;base&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="n"&gt;size&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;ROUNDUP&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;size&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;PGSIZE&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
@@ -1118,7 +1162,7 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;p&gt;这个时候 APs 算是 boot 完成了。&lt;/p&gt;
 &lt;h4&gt;Exercise 2&lt;/h4&gt;
 &lt;p&gt;因为在boot APs的时候，需要将mpentry.S load到 MPENTRY_ADDR中，所以在page_init()的时候，需要把MPENTRY_ADDR 标记为占用。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="n"&gt;PGNUM&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;IOPHYSMEM&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;++&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="n"&gt;PGNUM&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;IOPHYSMEM&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;++&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="c1"&gt;// LAB 4 mark the physical page at MPENTRY_PADDR as in use.&lt;/span&gt;
   &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="n"&gt;PGNUM&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;MPENTRY_PADDR&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
     &lt;span class="n"&gt;pages&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;].&lt;/span&gt;&lt;span class="n"&gt;pp_ref&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -1146,7 +1190,7 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;h3&gt;Exercise 3, 4&lt;/h3&gt;
 &lt;h4&gt;Something need to know&lt;/h4&gt;
 &lt;p&gt;对于多核操作系统，需要注意对于每个CPU，哪些数据结构是私有的，哪些是共享的。在JOS中，对每个CPU都有struct CpuInfo:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="c1"&gt;// Per-CPU state&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="c1"&gt;// Per-CPU state&lt;/span&gt;
 &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;CpuInfo&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="kt"&gt;uint8_t&lt;/span&gt; &lt;span class="n"&gt;cpu_id&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;                 &lt;span class="c1"&gt;// Local APIC ID; index into cpus[] below&lt;/span&gt;
   &lt;span class="k"&gt;volatile&lt;/span&gt; &lt;span class="kt"&gt;unsigned&lt;/span&gt; &lt;span class="n"&gt;cpu_status&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;   &lt;span class="c1"&gt;// The status of the CPU&lt;/span&gt;
@@ -1164,7 +1208,7 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;/ol&gt;
 &lt;h4&gt;Exercise 3&lt;/h4&gt;
 &lt;p&gt;在BSP mem_init()的时候对所有CPU初始化栈的页表:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;mem_init_mp&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -1181,7 +1225,7 @@ uvpd 的值就是:&lt;/p&gt;
 
 &lt;h4&gt;Exercise 4&lt;/h4&gt;
 &lt;p&gt;在BSP 和 APs trap_init()的时候，初始化每个CPU的TSS和IDT&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;trap_init_percpu&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="n"&gt;thiscpu&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;cpu_ts&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;ts_esp0&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;KSTACKTOP&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;thiscpu&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;cpu_id&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;KSTKSIZE&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;KSTKGAP&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
@@ -1207,7 +1251,7 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;p&gt;多核中，时刻要记住，&lt;strong&gt;一行代码都是分成很多小的指令执行的，每个指令执行的时候，都可以被中断掉，并且每行代码都可能被多个CPU同时执行。&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;为了解决多个CPU访问同一段程序的时候的 race condition，JOS中使用了内核大锁(big kernel lock),其作用就是只能又一个env在kernel态运行，在任何时间，都只能又一个user 的 env 在kernel 执行，这样就防止出现多个CPU同时修改一个env的信息的情况了。所以在从user 进入kernel的时候和kernel跳到user的时候，需要lock_kernel和unlock_kernel。&lt;/p&gt;
 &lt;p&gt;Big kernel lock 采用的是spinlock，当要尝试获取锁的时候，如果没有拿到就spin在那里，直到拿到为止。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="n"&gt;truct&lt;/span&gt; &lt;span class="n"&gt;spinlock&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="n"&gt;truct&lt;/span&gt; &lt;span class="n"&gt;spinlock&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="kt"&gt;unsigned&lt;/span&gt; &lt;span class="n"&gt;locked&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;       &lt;span class="c1"&gt;// Is the lock held?&lt;/span&gt;
 
 &lt;span class="cp"&gt;#ifdef DEBUG_SPINLOCK&lt;/span&gt;
@@ -1232,7 +1276,7 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;li&gt;%eax = temp&lt;/li&gt;
 &lt;li&gt;un-freeze other memory activity&lt;/li&gt;
 &lt;/ol&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;spin_lock&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;spinlock&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;lk&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
 &lt;span class="cp"&gt;#ifdef DEBUG_SPINLOCK&lt;/span&gt;
@@ -1278,7 +1322,7 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;h3&gt;Exercise 6&lt;/h3&gt;
 &lt;h4&gt;Exercise 6&lt;/h4&gt;
 &lt;p&gt;实现一个Round-Robin的调度算法，sched_yield() 函数的作用就是从envs中轮询挑选一个空闲的env来执行，如果没有，那么就继续执行之前的那个env，注意不能让两个CPU同时跑一个env。注意，轮询的时候，要从上次sched 的env的位置开始往下找，而不是从头，否则会有一些env始终无法调度到的情况。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;sched_yield&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;idle&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -1314,7 +1358,7 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;h4&gt;Question 4&lt;/h4&gt;
 &lt;p&gt;old env 的registers包含了old env的运行的状态，运行到哪个eip，使用的是哪个ss，ssp等等，当这个old env被调度，继续执行的时候，需要知道之前执行到哪里了，所以是需要保存old env的registers的。&lt;/p&gt;
 &lt;p&gt;old env 的 reigsters 是在 trap(trapframe)中，把参数 trapframe，拷贝到 curenv-&amp;gt;env_tf，上的，这样就保存了trap之前，env 的状态了，curenv 是在 UENV 虚拟地址上的。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="c1"&gt;// Copy trap frame (which is currently on the stack)&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="c1"&gt;// Copy trap frame (which is currently on the stack)&lt;/span&gt;
 &lt;span class="c1"&gt;// into &amp;#39;curenv-&amp;gt;env_tf&amp;#39;, so that running the environment&lt;/span&gt;
 &lt;span class="c1"&gt;// will restart at the trap point.&lt;/span&gt;
 &lt;span class="c1"&gt;// now, the code is running in kernel mode, but curenv is not &lt;/span&gt;
@@ -1333,7 +1377,7 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;p&gt;记住这句话：&lt;strong&gt;大道理谁都懂，魔鬼在细节！&lt;/strong&gt; 在写kernel的代码的时候，要考到到各种输入的corner case。&lt;/p&gt;
 &lt;h4&gt;sys_exofork 的实现&lt;/h4&gt;
 &lt;p&gt;sys_exofork 的作用就是alloc 一个新的env，这个env 调用系统调用的孩子(curenv 就是调用这个系统调用的env)。同时将son env的寄存器的值初始化为parent env的值，这样相当于son env 也是执行到这里的，只不过son env的status 是 ENV_NOT_RUNNABLE，因为还没有初始化页表什么的，所以还是不能运行的。对于函数的返回值，如果是parent env，那么返回son env 的id，如果是son env，那么返回0。如何区分这个呢？想到系统调用的返回值是记录在trapframe 的eax寄存器中，所以，注意对son env的寄存器初始化的时候，要将son env 的eax寄存器初始化为0。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;envid_t&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="n"&gt;envid_t&lt;/span&gt;
 &lt;span class="nf"&gt;sys_exofork&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;newenv&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -1361,8 +1405,8 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;li&gt;envid 需要是curenv 的son。通过envid2env检查。&lt;/li&gt;
 &lt;li&gt;status 只能是 ENV_RUNNABLE 或者 ENV_NOT_RUNNABLE，因为这个系统调用是配合sys_exofork的。&lt;/li&gt;
 &lt;/ul&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt;
-&lt;span class="nf"&gt;sys_env_set_status&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;envid&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;status&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt;
+&lt;span class="nf"&gt;sys_env_set_status&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;envid&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;status&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;ret&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;son_env&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -1392,8 +1436,8 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;li&gt;如果插入pte失败，记得把分配的物理页回收。&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;因为这个系统调用实现的时候，先page_alloc，分配一个新的PageInfo，然后将这个PageInfo page_insert到va上，一个副作用就是如果va对应的PageInfo存在，那么之前的PageInfo就会被unmap掉。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt;
-&lt;span class="nf"&gt;sys_page_alloc&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;envid&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;va&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;perm&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt;
+&lt;span class="nf"&gt;sys_page_alloc&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;envid&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;va&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;perm&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;ret&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;env&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -1435,14 +1479,14 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;li&gt;凡是涉及到虚拟地址空间的，创建这个va的page的时候，注意这个va是否已经被占用了。&lt;/li&gt;
 &lt;li&gt;凡是涉及到页表权限FLAG的，都要检查user是否有这个权限设置这个FLAG。&lt;/li&gt;
 &lt;/ul&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt;
-&lt;span class="nf"&gt;sys_page_map&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;srcenvid&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;srcva&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
-       &lt;span class="kt"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;dstenvid&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;dstva&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;perm&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt;
+&lt;span class="nf"&gt;sys_page_map&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;srcenvid&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;srcva&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+       &lt;span class="n"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;dstenvid&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;dstva&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;perm&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;srcenv&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;dstenv&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;ret&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;PageInfo&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;pp&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-  &lt;span class="kt"&gt;pte_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;src_pte&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+  &lt;span class="n"&gt;pte_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;src_pte&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
 
   &lt;span class="c1"&gt;// check srcenvid and dstenvid&lt;/span&gt;
   &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;((&lt;/span&gt;&lt;span class="n"&gt;ret&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;envid2env&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;srcenvid&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;srcenv&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
@@ -1474,8 +1518,8 @@ uvpd 的值就是:&lt;/p&gt;
 
 &lt;h4&gt;sys_page_unmap 的实现&lt;/h4&gt;
 &lt;p&gt;sys_page_unmap的功能就是释放envid对应的虚拟地址空间va。注意检查参数。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt;
-&lt;span class="nf"&gt;sys_page_unmap&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;envid&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;va&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt;
+&lt;span class="nf"&gt;sys_page_unmap&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;envid&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;va&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;ret&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;env&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -1497,11 +1541,11 @@ uvpd 的值就是:&lt;/p&gt;
 
 &lt;h3&gt;利用刚刚完成的系统调用在用户态实现简单的 fork&lt;/h3&gt;
 &lt;p&gt;在user/dumbfork.c 中实现的dumbfork，没有实现COW，过程如下:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="c1"&gt;// 这段代码是user的代码，在user态执行。&lt;/span&gt;
-&lt;span class="kt"&gt;envid_t&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="c1"&gt;// 这段代码是user的代码，在user态执行。&lt;/span&gt;
+&lt;span class="n"&gt;envid_t&lt;/span&gt;
 &lt;span class="nf"&gt;dumbfork&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
-  &lt;span class="kt"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;envid&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+  &lt;span class="n"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;envid&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="kt"&gt;uint8_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;addr&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="k"&gt;extern&lt;/span&gt; &lt;span class="kt"&gt;unsigned&lt;/span&gt; &lt;span class="kt"&gt;char&lt;/span&gt; &lt;span class="n"&gt;end&lt;/span&gt;&lt;span class="p"&gt;[];&lt;/span&gt;
@@ -1559,10 +1603,10 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;li&gt;通过memmove，将parent env 中的va对应的内容复制到 tmpva上。&lt;/li&gt;
 &lt;li&gt;在parent env中sys_page_unmap 自己的tmpva。这样tmpva对应的物理页的refcount 就是1了，是son va引用的。&lt;/li&gt;
 &lt;/ol&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="c1"&gt;// 这段代码是user的，在user态执行。&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="c1"&gt;// 这段代码是user的，在user态执行。&lt;/span&gt;
 &lt;span class="c1"&gt;// dup当前env的 addr 到 destenv的addr 上。&lt;/span&gt;
 &lt;span class="kt"&gt;void&lt;/span&gt;
-&lt;span class="nf"&gt;duppage&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;dstenv&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;addr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="nf"&gt;duppage&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;dstenv&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;addr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
 
@@ -1581,7 +1625,7 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;p&gt;-- EOF --&lt;/p&gt;</summary><category term="[6.828"></category><category term="OS]"></category></entry><entry><title>6.828 Lab3 PartB 小结</title><link href="http://zorksylar.github.io/6.828-lab3-b-writeup.html" rel="alternate"></link><updated>2013-08-21T00:00:00+08:00</updated><author><name>zorksylar</name></author><id>tag:zorksylar.github.io,2013-08-21:6.828-lab3-b-writeup.html</id><summary type="html">&lt;h3&gt;Page Faults, Breakpoints Exceptions, and System Calls&lt;/h3&gt;
 &lt;h3&gt;Exercise 5,6,7&lt;/h3&gt;
 &lt;p&gt;在trap_dispath中添加代码，能够传到相应的处理函数执行。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;trap_dispatch&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Trapframe&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;tf&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;tf&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;tf_trapno&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="n"&gt;T_PGFLT&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
@@ -1612,7 +1656,7 @@ uvpd 的值就是:&lt;/p&gt;
 
 
 &lt;p&gt;添加system_call 参数传递代码。注意系统调用对应的中断的 DPL = 3。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;system_call_handler&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Trapframe&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;tf&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;syscallno&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;a1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;a2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;a3&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;a4&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;a5&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -1628,7 +1672,7 @@ uvpd 的值就是:&lt;/p&gt;
 
 
 &lt;p&gt;添加dispatch system_call 的代码：&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="c1"&gt;// Dispatches to the correct kernel function, passing the arguments.&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="c1"&gt;// Dispatches to the correct kernel function, passing the arguments.&lt;/span&gt;
 &lt;span class="kt"&gt;int32_t&lt;/span&gt;
 &lt;span class="nf"&gt;syscall&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;syscallno&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;a1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;a2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;a3&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;a4&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;a5&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
@@ -1643,11 +1687,11 @@ uvpd 的值就是:&lt;/p&gt;
     &lt;span class="k"&gt;break&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
 
   &lt;span class="k"&gt;case&lt;/span&gt; &lt;span class="nl"&gt;SYS_getenvid&lt;/span&gt; &lt;span class="p"&gt;:&lt;/span&gt;
-    &lt;span class="n"&gt;ret&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;envid_t&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="n"&gt;sys_getenvid&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;
+    &lt;span class="n"&gt;ret&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;envid_t&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="n"&gt;sys_getenvid&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;
     &lt;span class="k"&gt;break&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
 
   &lt;span class="k"&gt;case&lt;/span&gt; &lt;span class="nl"&gt;SYS_env_destroy&lt;/span&gt; &lt;span class="p"&gt;:&lt;/span&gt;
-    &lt;span class="n"&gt;ret&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;uint32_t&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="n"&gt;sys_env_destroy&lt;/span&gt;&lt;span class="p"&gt;((&lt;/span&gt;&lt;span class="kt"&gt;envid_t&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="n"&gt;a1&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
+    &lt;span class="n"&gt;ret&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;uint32_t&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="n"&gt;sys_env_destroy&lt;/span&gt;&lt;span class="p"&gt;((&lt;/span&gt;&lt;span class="n"&gt;envid_t&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="n"&gt;a1&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
     &lt;span class="k"&gt;break&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
 
   &lt;span class="k"&gt;default&lt;/span&gt; &lt;span class="o"&gt;:&lt;/span&gt;
@@ -1662,12 +1706,12 @@ uvpd 的值就是:&lt;/p&gt;
 
 &lt;h3&gt;Exercise 8,9,10&lt;/h3&gt;
 &lt;p&gt;在libmain.c 中添加代码，初始化 thisenv，调用sys_getenvid()获取当前运行进程的envid，然后根据ENVX(envid)得出当前env在envs数组中的偏移量，获取thisenv。 进程退出的时候，exit() 函数调用系统调用sys_env_destory(0), 0 表示当前的env。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;libmain&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;argc&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;char&lt;/span&gt; &lt;span class="o"&gt;**&lt;/span&gt;&lt;span class="n"&gt;argv&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="c1"&gt;// set thisenv to point at our Env structure in envs[].&lt;/span&gt;
   &lt;span class="c1"&gt;// LAB 3: Your code here.&lt;/span&gt;
-  &lt;span class="kt"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;envid&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;sys_getenvid&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;
+  &lt;span class="n"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;envid&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;sys_getenvid&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;
   &lt;span class="n"&gt;thisenv&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;envs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;ENVX&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;envid&lt;/span&gt;&lt;span class="p"&gt;)]);&lt;/span&gt;
 
   &lt;span class="c1"&gt;// save the name of the program so that panic() can use it&lt;/span&gt;
@@ -1684,7 +1728,7 @@ uvpd 的值就是:&lt;/p&gt;
 
 
 &lt;p&gt;在lib/entry.S 中已经初始化了envs，指向系统的envs数组，所以envs可以直接 extern 之后使用。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;data&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;data&lt;/span&gt;
 &lt;span class="c1"&gt;// Define the global symbols &amp;#39;envs&amp;#39;, &amp;#39;pages&amp;#39;, &amp;#39;uvpt&amp;#39;, and &amp;#39;uvpd&amp;#39;&lt;/span&gt;
 &lt;span class="c1"&gt;// so that they can be used in C as if they were ordinary global arrays.&lt;/span&gt;
   &lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;globl&lt;/span&gt; &lt;span class="n"&gt;envs&lt;/span&gt;
@@ -1700,11 +1744,11 @@ uvpd 的值就是:&lt;/p&gt;
 
 &lt;p&gt;处理PageFault。对于这个中断，如果发生在kernel处理自己的数据结构的时候，那么说明kernel bug了，这时候就应该把kernel panic 掉。如果发生在kernel 去引用user的一个指针的时候（一个指针就是一个虚拟地址），如kernel 访问 user 的一个地址，出现了PGFLT，那么就需要把 user 的这个env panic 掉。因为kernel有更多的权限，所以在处理PGFLT的时候，应该小心。
 为了在kernel态区分这两种PGFLT，user_mem_check()这个函数就是判断这个env是否有访问一个虚拟地址va的权限的。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="kt"&gt;int&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kt"&gt;int&lt;/span&gt;
 &lt;span class="nf"&gt;user_mem_check&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;env&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;va&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;size_t&lt;/span&gt; &lt;span class="n"&gt;len&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;perm&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;va_end&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="n"&gt;ROUNDUP&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;va&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;len&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;PGSIZE&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
-  &lt;span class="kt"&gt;pte_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;pte&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+  &lt;span class="n"&gt;pte_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;pte&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="c1"&gt;// 注意这里 第一次的va不用ROUND，之后的都需要&lt;/span&gt;
   &lt;span class="c1"&gt;// 如果 va = va + PGSIZE，那么在 buggyhello2 就过不了&lt;/span&gt;
   &lt;span class="c1"&gt;// 囧，虽然我觉得功能上都一样&lt;/span&gt;
@@ -1722,7 +1766,7 @@ uvpd 的值就是:&lt;/p&gt;
 
 
 &lt;p&gt;在PGFLT中添加判断，如果是kernel在处理自己的数据结构的时候产生的，那么就直接panic掉。因为tf-&amp;gt;cs保存的是中断之前的cs，所以通过判断cs的CPL就能够判断出是user的还是kernel的。通过error code 的 U/S 字段也一样。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;page_fault_handler&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Trapframe&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;tf&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;fault_va&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -1752,7 +1796,7 @@ uvpd 的值就是:&lt;/p&gt;
 
 
 &lt;p&gt;user发出系统调用，kernel在访问user的地址空间的时候都需要做检查，在系统调用中添加mem检查，下面的const char *s 就是用户的一个地址空间。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;sys_cputs&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="kt"&gt;char&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;size_t&lt;/span&gt; &lt;span class="n"&gt;len&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="c1"&gt;// Check that the user has permission to read memory [s, s+len).&lt;/span&gt;
@@ -1767,7 +1811,7 @@ uvpd 的值就是:&lt;/p&gt;
 
 
 &lt;p&gt;在kern/kdebug.c 中添加对 user 地址的检查。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="kt"&gt;int&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kt"&gt;int&lt;/span&gt;
 &lt;span class="nf"&gt;debuginfo_eip&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;uintptr_t&lt;/span&gt; &lt;span class="n"&gt;addr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Eipdebuginfo&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;info&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="p"&gt;...&lt;/span&gt; 
@@ -1799,23 +1843,23 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;在JOS里面， struct Env 相当于是 linux kernel 里面的 task_struct，用于表示一个task。&lt;/li&gt;
 &lt;/ol&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Trapframe&lt;/span&gt; &lt;span class="n"&gt;env_tf&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;  &lt;span class="c1"&gt;// Saved registers&lt;/span&gt;
   &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;env_link&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;   &lt;span class="c1"&gt;// Next free Env&lt;/span&gt;
-  &lt;span class="kt"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;env_id&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;     &lt;span class="c1"&gt;// Unique environment identifier&lt;/span&gt;
-  &lt;span class="kt"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;env_parent_id&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;    &lt;span class="c1"&gt;// env_id of this env&amp;#39;s parent&lt;/span&gt;
+  &lt;span class="n"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;env_id&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;     &lt;span class="c1"&gt;// Unique environment identifier&lt;/span&gt;
+  &lt;span class="n"&gt;envid_t&lt;/span&gt; &lt;span class="n"&gt;env_parent_id&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;    &lt;span class="c1"&gt;// env_id of this env&amp;#39;s parent&lt;/span&gt;
   &lt;span class="k"&gt;enum&lt;/span&gt; &lt;span class="n"&gt;EnvType&lt;/span&gt; &lt;span class="n"&gt;env_type&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;    &lt;span class="c1"&gt;// Indicates special system environments&lt;/span&gt;
   &lt;span class="kt"&gt;unsigned&lt;/span&gt; &lt;span class="n"&gt;env_status&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;    &lt;span class="c1"&gt;// Status of the environment&lt;/span&gt;
   &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;env_runs&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;    &lt;span class="c1"&gt;// Number of times environment has run&lt;/span&gt;
 
   &lt;span class="c1"&gt;// Address space&lt;/span&gt;
-  &lt;span class="kt"&gt;pde_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;env_pgdir&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;   &lt;span class="c1"&gt;// Kernel virtual address of page dir&lt;/span&gt;
+  &lt;span class="n"&gt;pde_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;env_pgdir&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;   &lt;span class="c1"&gt;// Kernel virtual address of page dir&lt;/span&gt;
 &lt;span class="p"&gt;};&lt;/span&gt;
 &lt;/pre&gt;&lt;/div&gt;
 
 
 &lt;p&gt;其中的 env_tf 用于保存当这个env的中间状态，恢复这个trapframe 就能够按照之前中断的地方继续执行了。如，进程切换的时候，env_tf 中保存着 task 运行所需要的各种寄存器的值。其中的 packed 表示取消编译器对结构体的优化对齐，取消优化对齐，结构体的访问速度可能会降低，这样做是为了和 Intel IA32 Manual 里面的 trapframe 保持一致。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;PushRegs&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;PushRegs&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="cm"&gt;/* registers as pushed by pusha */&lt;/span&gt;
   &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;reg_edi&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;reg_esi&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -1849,14 +1893,14 @@ uvpd 的值就是:&lt;/p&gt;
 
 
 &lt;p&gt;为了管理所有的Env，在JOS里面，维护了三个变量:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;envs&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="nb"&gt;NULL&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;    &lt;span class="c1"&gt;// All environments&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;envs&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="nb"&gt;NULL&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;    &lt;span class="c1"&gt;// All environments&lt;/span&gt;
 &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;curenv&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="nb"&gt;NULL&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;    &lt;span class="c1"&gt;// The current env&lt;/span&gt;
 &lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;env_free_list&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="c1"&gt;// Free environment list&lt;/span&gt;
 &lt;/pre&gt;&lt;/div&gt;
 
 
 &lt;p&gt;在 JOS 中，所有的 struct Env 都是通过 envs 这个全局的变量维护的，envs 是一个 struct Env 的数组。在 mem_init()的时候，同时初始化 envs。同时为了能够让 user 态能够访问自己的 Env ，所以需要在 kern_pgdir 中映射 UENVS 到 envs，同时权限是对 user RO 的。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="c1"&gt;// Make &amp;#39;envs&amp;#39; point to an array of size &amp;#39;NENV&amp;#39; of &amp;#39;struct Env&amp;#39;.&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="c1"&gt;// Make &amp;#39;envs&amp;#39; point to an array of size &amp;#39;NENV&amp;#39; of &amp;#39;struct Env&amp;#39;.&lt;/span&gt;
 &lt;span class="c1"&gt;// LAB 3: Your code here.&lt;/span&gt;
 &lt;span class="n"&gt;envs&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="n"&gt;boot_alloc&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;sizeof&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;NENV&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
 
@@ -1873,7 +1917,7 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;h3&gt;Exercise 2&lt;/h3&gt;
 &lt;h4&gt;2.1 env_init()&lt;/h4&gt;
 &lt;p&gt;在2中已经分配的 envs，env_init() 作用就是对 envs 数组 env_free_list 初始化。为了保证第一次调用 env_alloc() 的时候，能够返回的是 envs[0], 所以注意循环的顺序。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;env_init&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="c1"&gt;// Set up envs array&lt;/span&gt;
@@ -1900,7 +1944,7 @@ uvpd 的值就是:&lt;/p&gt;
 
 &lt;h4&gt;2.2 env_setup_vm()&lt;/h4&gt;
 &lt;p&gt;对于一个给定的 env ，初始化它的 env_pgdir，也就是虚拟地址空间。在这里注意需要将 kern_pgdir 作为模板初始化 env_pgdir ，这样做的原因是为了能够当在 kernel 态，访问 user 态的一个虚拟地址的时候，只要将页表切换为 user 的页表，同时能够保证 kernel 的代码能够继续执行。注意 kern_pgidr 权限的控制。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt;
 &lt;span class="nf"&gt;env_setup_vm&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -1922,7 +1966,7 @@ uvpd 的值就是:&lt;/p&gt;
 
 &lt;h4&gt;2.3 region_alloc()&lt;/h4&gt;
 &lt;p&gt;在给定的 env 上，分配物理页，映射到给定的虚拟地址上。物理页不用 memset 为0。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;region_alloc&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;va&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;size_t&lt;/span&gt; &lt;span class="n"&gt;len&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="n"&gt;va&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;ROUNDDOWN&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;va&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;PGSIZE&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
@@ -1944,7 +1988,7 @@ uvpd 的值就是:&lt;/p&gt;
 
 &lt;h4&gt;2.4 load_icode()&lt;/h4&gt;
 &lt;p&gt;将一个ELF文件 load 到内存中,关于 ELF 文件的格式,可以参考 &lt;strong&gt;&lt;a href="http://pdos.csail.mit.edu/6.828/2012/readings/elf.pdf"&gt;这里&lt;/a&gt;&lt;/strong&gt;.ELF 文件是有一个elfhdr，里面记录了Proghdr。elfhdr-&amp;gt;e_phnum 表示有多少个Proghdr，最开始的Proghdr 的为值通过 elfhdr-&amp;gt;e_phoff 这个偏移量给出。对于每个 Proghdr，只有 p_type 是 ELF_PROG_LOAD 的表示可以 load 到内存中。同时 Proghdr-&amp;gt;p_memsz 表示占用内存的大小， Proghdr-&amp;gt;p_filesz 表示 在Proghdr的大小，这两个可以不一样，memsz - filesz 就是 BSS 段的大小，所以在初始化的时候，需要将 BSS 段清零。 Proghdr-&amp;gt;p_va 表示这段对应的虚拟地址。 初始化 va 对应的 PTE。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;load_icode&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;uint8_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;binary&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;size_t&lt;/span&gt; &lt;span class="n"&gt;size&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Proghdr&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;ph&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;eph&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
@@ -1984,7 +2028,7 @@ uvpd 的值就是:&lt;/p&gt;
 
 &lt;h4&gt;2.5 env_create()&lt;/h4&gt;
 &lt;p&gt;通过 env_alloc 从 env_free_list 上分配 env 所需要的空间，初始化其中的一些状态信息（除了 env_pgdir 之外的信息）。调用 load_icode 将 ELF load 到对应的虚拟地址空间上。同时初始化对应的PTE。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;env_create&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;uint8_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;binary&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;size_t&lt;/span&gt; &lt;span class="n"&gt;size&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="k"&gt;enum&lt;/span&gt; &lt;span class="n"&gt;EnvType&lt;/span&gt; &lt;span class="n"&gt;type&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="c1"&gt;// LAB 3: Your code here.&lt;/span&gt;
@@ -2001,7 +2045,7 @@ uvpd 的值就是:&lt;/p&gt;
 
 &lt;h4&gt;2.6 env_run()&lt;/h4&gt;
 &lt;p&gt;更新 curenv，因为在第一个 env run 之前， curenv 为 NULL，需要加上判断 NULL 的情况。然后替换页表，替换各种寄存器，让新的env从上次中断的地方继续执行，调用 env_pop_tf 之后，就不会再返回，直接执行 env 的程序。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;env_run&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Env&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="c1"&gt;// Step 1&lt;/span&gt;
@@ -2021,7 +2065,7 @@ uvpd 的值就是:&lt;/p&gt;
 
 
 &lt;p&gt;env_pop_tf ： 用 tf 的地址赋值给esp，从trapframe上恢复 struct PushRegs 和 ES， DS。然后跳过trapno 和 errcode，然后对于这个trap 是否又 特权等级的变化，IRET 指令能够处理（参考Intel Instruction Set Reference A-M 中的IRET指令的说明)。简而言之就是，iret 会从栈上pop出 eip 和 cs，然后从这个地方开始执行。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;env_pop_tf&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Trapframe&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;tf&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="kr"&gt;__asm&lt;/span&gt; &lt;span class="n"&gt;__volatile&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;&amp;quot;movl %0,%%esp&lt;/span&gt;&lt;span class="se"&gt;\n&lt;/span&gt;&lt;span class="s"&gt;&amp;quot;&lt;/span&gt;
@@ -2039,7 +2083,7 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;h3&gt;Exercise 4&lt;/h3&gt;
 &lt;h4&gt;4.1 初始化 IDT&lt;/h4&gt;
 &lt;p&gt;在 trapentry.S 中初始化中断处理函数，根据是否有Error Code，中断处理函数分为两种 TRAPHANDLER_NOEC 和 TRAPHANDLER。看代码发现其本质就是 初始化 trapframe 中的 tf_trapno 和 tf_err 字段，然后，跳到 _alltraps 统一处理。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="cp"&gt;#define TRAPHANDLER(name, num)            \&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="cp"&gt;#define TRAPHANDLER(name, num)            \&lt;/span&gt;
 &lt;span class="cp"&gt;  .globl name;    &lt;/span&gt;&lt;span class="cm"&gt;/* define global symbol for &amp;#39;name&amp;#39; */&lt;/span&gt;&lt;span class="cp"&gt; \&lt;/span&gt;
 &lt;span class="cp"&gt;  .type name, @function;  &lt;/span&gt;&lt;span class="cm"&gt;/* symbol type is function */&lt;/span&gt;&lt;span class="cp"&gt;   \&lt;/span&gt;
 &lt;span class="cp"&gt;  .align 2;   &lt;/span&gt;&lt;span class="cm"&gt;/* align function definition */&lt;/span&gt;&lt;span class="cp"&gt;   \&lt;/span&gt;
@@ -2059,7 +2103,7 @@ uvpd 的值就是:&lt;/p&gt;
 
 
 &lt;p&gt;所以中断处理函数 通过查 Intel 的 中断那节的 Manual 可以这样：&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="cm"&gt;/*&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="cm"&gt;/*&lt;/span&gt;
 &lt;span class="cm"&gt; * Lab 3: Your code here for generating entry points for the different traps.&lt;/span&gt;
 &lt;span class="cm"&gt; */&lt;/span&gt;
 &lt;span class="c1"&gt;// check if has error code : http://pdos.csail.mit.edu/6.828/2012/readings/i386/s09_06.htm&lt;/span&gt;
@@ -2074,7 +2118,7 @@ uvpd 的值就是:&lt;/p&gt;
 
 
 &lt;p&gt;对于 _alltraps 函数，因为 trapframe 的 eip , cs 及后面的字段都是硬件保存了，所以我们只要保存PushRegs 和 ds es 就可以。&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;global&lt;/span&gt; &lt;span class="n"&gt;_alltraps&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;global&lt;/span&gt; &lt;span class="n"&gt;_alltraps&lt;/span&gt;
 &lt;span class="nl"&gt;_alltraps&lt;/span&gt; &lt;span class="p"&gt;:&lt;/span&gt;
   &lt;span class="c1"&gt;// Build trap frame as an argument of trap(struct Trapframe *tf)&lt;/span&gt;
   &lt;span class="c1"&gt;// in trap.c , trapno and error code are set up by TRAPHANDLER&lt;/span&gt;
@@ -2098,7 +2142,7 @@ uvpd 的值就是:&lt;/p&gt;
 
 
 &lt;p&gt;初始化 IDT &lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;
 &lt;span class="nf"&gt;trap_init&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;void&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="k"&gt;extern&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;Segdesc&lt;/span&gt; &lt;span class="n"&gt;gdt&lt;/span&gt;&lt;span class="p"&gt;[];&lt;/span&gt;
@@ -2143,7 +2187,7 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;li&gt;用2中实现的页表管理函数，初始化jos的整个memory layout.&lt;/li&gt;
 &lt;/ol&gt;
 &lt;p&gt;好吧，因为这个memory layout太重要了，所以就贴在这里了，下面的这个memory layout不是linux kernel的，是jos的，不要看错了。 &lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;*
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;*
 * Virtual memory map:                                Permissions
 *                                                    kernel/user
 *
@@ -2213,7 +2257,7 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;h3&gt;mem_init 做的事情&lt;/h3&gt;
 &lt;h4&gt;1. 有多少个物理页&lt;/h4&gt;
 &lt;p&gt;在mem_init()中首先进入i386_detect_memory()，记录有多少个物理页，在这里注意有个io_hole : &lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;    +---------------------------------------+
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;    +---------------------------------------+
     |base_mem |  io_hole |  ext_mem         |
     +---------------------------------------+
 pa  0       640k      1024k
@@ -2226,7 +2270,7 @@ pa  0       640k      1024k
 关于boot_alloc函数：这个函数只是在初始化kernel的页表的时候使用，注意一点：&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;因为这个时候jos还是跑在之前设定的[KERNBASE, KERNBASE+4MB]的地址空间上，使用的页表也是之前entrypgdir.c中设定的页表，所以分配的虚拟地址是有限的只能在KERNBASE 到 KERNBASE+4MB这个范围内。&lt;/strong&gt;&lt;/p&gt;
 &lt;h4&gt;3. 在kern_pgdir中插入一条 VA 未UVPT 到 kern_pgdir所在的PA的映射&lt;/h4&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;      &lt;span class="n"&gt;kern_pgdir&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;PDX&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;UVPT&lt;/span&gt;&lt;span class="p"&gt;)]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;PADDR&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;kern_pgdir&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;PTE_U&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;PTE_P&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;      &lt;span class="n"&gt;kern_pgdir&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;PDX&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;UVPT&lt;/span&gt;&lt;span class="p"&gt;)]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;PADDR&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;kern_pgdir&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;PTE_U&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;PTE_P&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
 &lt;/pre&gt;&lt;/div&gt;
 
 
@@ -2234,7 +2278,7 @@ pa  0       640k      1024k
 另外还要注意这里的PADDR，因为jos的程序是运行在虚拟地址空间上的，所以kern_pgdir的值也是一个虚拟地址，不是实际的物理地址，因为当前使用的页表还是在ELF执行的时候最开始设置的页表，所以PADDR(kern_pgdir) 就是把 kern_pgdir - KERNBASE。&lt;/p&gt;
 &lt;h4&gt;4. 非配所有管理物理页元数据数组 pages&lt;/h4&gt;
 &lt;p&gt;物理页元数据:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="cm"&gt;/*&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="cm"&gt;/*&lt;/span&gt;
 &lt;span class="cm"&gt; * Page descriptor structures, mapped at UPAGES.&lt;/span&gt;
 &lt;span class="cm"&gt; * Read/write to the kernel, read-only to user programs.&lt;/span&gt;
 &lt;span class="cm"&gt; *&lt;/span&gt;
@@ -2260,7 +2304,7 @@ pa  0       640k      1024k
 
 
 &lt;p&gt;kernel管理的物理页数组：&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;PageInfo&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pages&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;   &lt;span class="c1"&gt;// Physical page state array&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;PageInfo&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pages&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;   &lt;span class="c1"&gt;// Physical page state array&lt;/span&gt;
 
 &lt;span class="c1"&gt;//////////////////////////////////////////////////////////////////////&lt;/span&gt;
 &lt;span class="c1"&gt;// Allocate an array of npages &amp;#39;struct PageInfo&amp;#39;s and store it in &amp;#39;pages&amp;#39;.&lt;/span&gt;
@@ -2273,14 +2317,14 @@ pa  0       640k      1024k
 
 
 &lt;p&gt;PageInfo 和 physical address 的转换：&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kr"&gt;inline&lt;/span&gt; &lt;span class="kt"&gt;physaddr_t&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kr"&gt;inline&lt;/span&gt; &lt;span class="n"&gt;physaddr_t&lt;/span&gt;
 &lt;span class="nf"&gt;page2pa&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;PageInfo&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pp&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pp&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt; &lt;span class="n"&gt;pages&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span class="n"&gt;PGSHIFT&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
 &lt;span class="p"&gt;}&lt;/span&gt;
 
 &lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kr"&gt;inline&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;PageInfo&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;
-&lt;span class="nf"&gt;pa2page&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;physaddr_t&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="nf"&gt;pa2page&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;physaddr_t&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
   &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;PGNUM&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;=&lt;/span&gt; &lt;span class="n"&gt;npages&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
     &lt;span class="n"&gt;panic&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;&amp;quot;pa2page called with invalid pa&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
@@ -2294,7 +2338,7 @@ pa  0       640k      1024k
 &lt;p&gt;标记那些物理页已经使用了，同时把没有使用的物理页通过pp_link链接起来，用page_free_list管理。注意，在bss之后分配的物理页，都是用boot_alloc分配的，boot_alloc函数中又一个static 的变量 nextfree，这个变量指向下一个没有使用的连续的物理页，通过这个变量可以知道bss之后的物理页，那些使用了，那些没有使用。 注意IOHOLE必须标记为使用过的。&lt;/p&gt;
 &lt;h4&gt;6. 根据虚拟地址的memory_layout 在kern_pgdir中插入对应的页表项&lt;/h4&gt;
 &lt;h4&gt;7. 使用新的页表 kern_pgdir 和重新设置一些flag&lt;/h4&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="n"&gt;lcr3&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;PADDR&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;kern_pgdir&lt;/span&gt;&lt;span class="p"&gt;));&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="n"&gt;lcr3&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;PADDR&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;kern_pgdir&lt;/span&gt;&lt;span class="p"&gt;));&lt;/span&gt;
 &lt;span class="p"&gt;....&lt;/span&gt;
 &lt;/pre&gt;&lt;/div&gt;
 
@@ -2302,18 +2346,18 @@ pa  0       640k      1024k
 &lt;h3&gt;页表管理函数&lt;/h3&gt;
 &lt;p&gt;注意两点：&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;在jos的代码运行的时候，都是运行在虚拟地址空间上的，指针都是虚拟地址，一个指针指向的值也是一个虚拟的地址，不是物理地址。在jos中，为了区分虚拟地址和物理地址：&lt;/strong&gt;&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="c1"&gt;// Pointers and addresses are 32 bits long.&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="c1"&gt;// Pointers and addresses are 32 bits long.&lt;/span&gt;
 &lt;span class="c1"&gt;// We use pointer types to represent virtual addresses,&lt;/span&gt;
 &lt;span class="c1"&gt;// uintptr_t to represent the numerical values of virtual addresses,&lt;/span&gt;
 &lt;span class="c1"&gt;// and physaddr_t to represent physical addresses.&lt;/span&gt;
 &lt;span class="k"&gt;typedef&lt;/span&gt; &lt;span class="kt"&gt;int32_t&lt;/span&gt; &lt;span class="kt"&gt;intptr_t&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
 &lt;span class="k"&gt;typedef&lt;/span&gt; &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="kt"&gt;uintptr_t&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-&lt;span class="k"&gt;typedef&lt;/span&gt; &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="kt"&gt;physaddr_t&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt; 
+&lt;span class="k"&gt;typedef&lt;/span&gt; &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;physaddr_t&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt; 
 &lt;/pre&gt;&lt;/div&gt;
 
 
 &lt;p&gt;所以在给指针本身赴值的时候，需要谨慎。如，在pgdir_walk函数中:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="c1"&gt;// Given &amp;#39;pgdir&amp;#39;, a pointer to a page directory, pgdir_walk returns&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="c1"&gt;// Given &amp;#39;pgdir&amp;#39;, a pointer to a page directory, pgdir_walk returns&lt;/span&gt;
 &lt;span class="c1"&gt;// a pointer to the page table entry (PTE) for linear address &amp;#39;va&amp;#39;.&lt;/span&gt;
 &lt;span class="c1"&gt;// This requires walking the two-level page table structure.&lt;/span&gt;
 &lt;span class="c1"&gt;//&lt;/span&gt;
@@ -2335,21 +2379,21 @@ pa  0       640k      1024k
 &lt;span class="c1"&gt;// Hint 3: look at inc/mmu.h for useful macros that mainipulate page&lt;/span&gt;
 &lt;span class="c1"&gt;// table and page directory entries.&lt;/span&gt;
 &lt;span class="c1"&gt;//&lt;/span&gt;
-&lt;span class="kt"&gt;pte_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;
-&lt;span class="nf"&gt;pgdir_walk&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;pde_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pgdir&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;va&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;create&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="n"&gt;pte_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;
+&lt;span class="nf"&gt;pgdir_walk&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pde_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pgdir&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;va&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="n"&gt;create&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="p"&gt;{&lt;/span&gt;
-  &lt;span class="kt"&gt;pde_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pde&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-  &lt;span class="kt"&gt;pte_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pgtab&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+  &lt;span class="n"&gt;pde_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pde&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+  &lt;span class="n"&gt;pte_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pgtab&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;PageInfo&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pp&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
 
   &lt;span class="n"&gt;pde&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;pgdir&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;PDX&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;va&lt;/span&gt;&lt;span class="p"&gt;)];&lt;/span&gt;
   &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pde&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&lt;/span&gt; &lt;span class="n"&gt;PTE_P&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
-    &lt;span class="n"&gt;pgtab&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;pte_t&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="n"&gt;KADDR&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;PTE_ADDR&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pde&lt;/span&gt;&lt;span class="p"&gt;));&lt;/span&gt;
+    &lt;span class="n"&gt;pgtab&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pte_t&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="n"&gt;KADDR&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;PTE_ADDR&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pde&lt;/span&gt;&lt;span class="p"&gt;));&lt;/span&gt;
   &lt;span class="p"&gt;}&lt;/span&gt; &lt;span class="k"&gt;else&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
     &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;!&lt;/span&gt;&lt;span class="n"&gt;create&lt;/span&gt; &lt;span class="o"&gt;||&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pp&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;page_alloc&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;ALLOC_ZERO&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
       &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
     &lt;span class="n"&gt;pp&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;pp_ref&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-    &lt;span class="n"&gt;pgtab&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;pte_t&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="n"&gt;KADDR&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;page2pa&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pp&lt;/span&gt;&lt;span class="p"&gt;));&lt;/span&gt;
+    &lt;span class="n"&gt;pgtab&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pte_t&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="n"&gt;KADDR&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;page2pa&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pp&lt;/span&gt;&lt;span class="p"&gt;));&lt;/span&gt;
     &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pde&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;PADDR&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pgtab&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;PTE_P&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;PTE_W&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;PTE_U&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
   &lt;span class="p"&gt;}&lt;/span&gt;
   &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;pgtab&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;PTX&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;va&lt;/span&gt;&lt;span class="p"&gt;)];&lt;/span&gt;
@@ -2359,7 +2403,7 @@ pa  0       640k      1024k
 
 &lt;p&gt;在给pgtab赋值的时候，pgtab指向的是一个虚拟地址，然后通过h/w的mmu的转换，能够将pgtab指向的虚拟地址映射到我们想要让他映射到的实际的物理地址上就需要做KADDR这样的转换。&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;在page_insert中的一个trick : 如果已经有一个page 映射在va上，那么需要先将这个page删除掉，但是如果page_insert同一个va很多次的时候，每次都要删除这个page，更优雅的做法:&lt;/strong&gt;&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pp&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;pp_ref&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;++&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pp&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;pp_ref&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;++&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
 &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pte&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&lt;/span&gt; &lt;span class="n"&gt;PTE_P&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; 
   &lt;span class="n"&gt;page_remove&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pgdir&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;va&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
 &lt;/pre&gt;&lt;/div&gt;

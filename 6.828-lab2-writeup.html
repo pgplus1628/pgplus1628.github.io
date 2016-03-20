@@ -35,8 +35,6 @@
     <link href="http://zorksylar.github.io/theme/css/pygments/manni.css" rel="stylesheet">
     <link rel="stylesheet" href="http://zorksylar.github.io/theme/css/style.css" type="text/css"/>
 
-        <link href="http://zorksylar.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate"
-              title="Z's Thoughts ATOM Feed"/>
 
 
 
@@ -121,7 +119,7 @@ Z's Thoughts            </a>
 <li>用2中实现的页表管理函数，初始化jos的整个memory layout.</li>
 </ol>
 <p>好吧，因为这个memory layout太重要了，所以就贴在这里了，下面的这个memory layout不是linux kernel的，是jos的，不要看错了。 </p>
-<div class="highlight"><pre>*
+<div class="highlight"><pre><span></span>*
 * Virtual memory map:                                Permissions
 *                                                    kernel/user
 *
@@ -191,7 +189,7 @@ Z's Thoughts            </a>
 <h3>mem_init 做的事情</h3>
 <h4>1. 有多少个物理页</h4>
 <p>在mem_init()中首先进入i386_detect_memory()，记录有多少个物理页，在这里注意有个io_hole : </p>
-<div class="highlight"><pre>    +---------------------------------------+
+<div class="highlight"><pre><span></span>    +---------------------------------------+
     |base_mem |  io_hole |  ext_mem         |
     +---------------------------------------+
 pa  0       640k      1024k
@@ -204,7 +202,7 @@ pa  0       640k      1024k
 关于boot_alloc函数：这个函数只是在初始化kernel的页表的时候使用，注意一点：</p>
 <p><strong>因为这个时候jos还是跑在之前设定的[KERNBASE, KERNBASE+4MB]的地址空间上，使用的页表也是之前entrypgdir.c中设定的页表，所以分配的虚拟地址是有限的只能在KERNBASE 到 KERNBASE+4MB这个范围内。</strong></p>
 <h4>3. 在kern_pgdir中插入一条 VA 未UVPT 到 kern_pgdir所在的PA的映射</h4>
-<div class="highlight"><pre>      <span class="n">kern_pgdir</span><span class="p">[</span><span class="n">PDX</span><span class="p">(</span><span class="n">UVPT</span><span class="p">)]</span> <span class="o">=</span> <span class="n">PADDR</span><span class="p">(</span><span class="n">kern_pgdir</span><span class="p">)</span> <span class="o">|</span> <span class="n">PTE_U</span> <span class="o">|</span> <span class="n">PTE_P</span><span class="p">;</span>
+<div class="highlight"><pre><span></span>      <span class="n">kern_pgdir</span><span class="p">[</span><span class="n">PDX</span><span class="p">(</span><span class="n">UVPT</span><span class="p">)]</span> <span class="o">=</span> <span class="n">PADDR</span><span class="p">(</span><span class="n">kern_pgdir</span><span class="p">)</span> <span class="o">|</span> <span class="n">PTE_U</span> <span class="o">|</span> <span class="n">PTE_P</span><span class="p">;</span>
 </pre></div>
 
 
@@ -212,7 +210,7 @@ pa  0       640k      1024k
 另外还要注意这里的PADDR，因为jos的程序是运行在虚拟地址空间上的，所以kern_pgdir的值也是一个虚拟地址，不是实际的物理地址，因为当前使用的页表还是在ELF执行的时候最开始设置的页表，所以PADDR(kern_pgdir) 就是把 kern_pgdir - KERNBASE。</p>
 <h4>4. 非配所有管理物理页元数据数组 pages</h4>
 <p>物理页元数据:</p>
-<div class="highlight"><pre><span class="cm">/*</span>
+<div class="highlight"><pre><span></span><span class="cm">/*</span>
 <span class="cm"> * Page descriptor structures, mapped at UPAGES.</span>
 <span class="cm"> * Read/write to the kernel, read-only to user programs.</span>
 <span class="cm"> *</span>
@@ -238,7 +236,7 @@ pa  0       640k      1024k
 
 
 <p>kernel管理的物理页数组：</p>
-<div class="highlight"><pre><span class="k">struct</span> <span class="n">PageInfo</span> <span class="o">*</span><span class="n">pages</span><span class="p">;</span>   <span class="c1">// Physical page state array</span>
+<div class="highlight"><pre><span></span><span class="k">struct</span> <span class="n">PageInfo</span> <span class="o">*</span><span class="n">pages</span><span class="p">;</span>   <span class="c1">// Physical page state array</span>
 
 <span class="c1">//////////////////////////////////////////////////////////////////////</span>
 <span class="c1">// Allocate an array of npages &#39;struct PageInfo&#39;s and store it in &#39;pages&#39;.</span>
@@ -251,14 +249,14 @@ pa  0       640k      1024k
 
 
 <p>PageInfo 和 physical address 的转换：</p>
-<div class="highlight"><pre><span class="k">static</span> <span class="kr">inline</span> <span class="kt">physaddr_t</span>
+<div class="highlight"><pre><span></span><span class="k">static</span> <span class="kr">inline</span> <span class="n">physaddr_t</span>
 <span class="nf">page2pa</span><span class="p">(</span><span class="k">struct</span> <span class="n">PageInfo</span> <span class="o">*</span><span class="n">pp</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="k">return</span> <span class="p">(</span><span class="n">pp</span> <span class="o">-</span> <span class="n">pages</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">PGSHIFT</span><span class="p">;</span>
 <span class="p">}</span>
 
 <span class="k">static</span> <span class="kr">inline</span> <span class="k">struct</span> <span class="n">PageInfo</span><span class="o">*</span>
-<span class="nf">pa2page</span><span class="p">(</span><span class="kt">physaddr_t</span> <span class="n">pa</span><span class="p">)</span>
+<span class="nf">pa2page</span><span class="p">(</span><span class="n">physaddr_t</span> <span class="n">pa</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="k">if</span> <span class="p">(</span><span class="n">PGNUM</span><span class="p">(</span><span class="n">pa</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">npages</span><span class="p">)</span>
     <span class="n">panic</span><span class="p">(</span><span class="s">&quot;pa2page called with invalid pa&quot;</span><span class="p">);</span>
@@ -272,7 +270,7 @@ pa  0       640k      1024k
 <p>标记那些物理页已经使用了，同时把没有使用的物理页通过pp_link链接起来，用page_free_list管理。注意，在bss之后分配的物理页，都是用boot_alloc分配的，boot_alloc函数中又一个static 的变量 nextfree，这个变量指向下一个没有使用的连续的物理页，通过这个变量可以知道bss之后的物理页，那些使用了，那些没有使用。 注意IOHOLE必须标记为使用过的。</p>
 <h4>6. 根据虚拟地址的memory_layout 在kern_pgdir中插入对应的页表项</h4>
 <h4>7. 使用新的页表 kern_pgdir 和重新设置一些flag</h4>
-<div class="highlight"><pre><span class="n">lcr3</span><span class="p">(</span><span class="n">PADDR</span><span class="p">(</span><span class="n">kern_pgdir</span><span class="p">));</span>
+<div class="highlight"><pre><span></span><span class="n">lcr3</span><span class="p">(</span><span class="n">PADDR</span><span class="p">(</span><span class="n">kern_pgdir</span><span class="p">));</span>
 <span class="p">....</span>
 </pre></div>
 
@@ -280,18 +278,18 @@ pa  0       640k      1024k
 <h3>页表管理函数</h3>
 <p>注意两点：</p>
 <p><strong>在jos的代码运行的时候，都是运行在虚拟地址空间上的，指针都是虚拟地址，一个指针指向的值也是一个虚拟的地址，不是物理地址。在jos中，为了区分虚拟地址和物理地址：</strong></p>
-<div class="highlight"><pre><span class="c1">// Pointers and addresses are 32 bits long.</span>
+<div class="highlight"><pre><span></span><span class="c1">// Pointers and addresses are 32 bits long.</span>
 <span class="c1">// We use pointer types to represent virtual addresses,</span>
 <span class="c1">// uintptr_t to represent the numerical values of virtual addresses,</span>
 <span class="c1">// and physaddr_t to represent physical addresses.</span>
 <span class="k">typedef</span> <span class="kt">int32_t</span> <span class="kt">intptr_t</span><span class="p">;</span>
 <span class="k">typedef</span> <span class="kt">uint32_t</span> <span class="kt">uintptr_t</span><span class="p">;</span>
-<span class="k">typedef</span> <span class="kt">uint32_t</span> <span class="kt">physaddr_t</span><span class="p">;</span> 
+<span class="k">typedef</span> <span class="kt">uint32_t</span> <span class="n">physaddr_t</span><span class="p">;</span> 
 </pre></div>
 
 
 <p>所以在给指针本身赴值的时候，需要谨慎。如，在pgdir_walk函数中:</p>
-<div class="highlight"><pre><span class="c1">// Given &#39;pgdir&#39;, a pointer to a page directory, pgdir_walk returns</span>
+<div class="highlight"><pre><span></span><span class="c1">// Given &#39;pgdir&#39;, a pointer to a page directory, pgdir_walk returns</span>
 <span class="c1">// a pointer to the page table entry (PTE) for linear address &#39;va&#39;.</span>
 <span class="c1">// This requires walking the two-level page table structure.</span>
 <span class="c1">//</span>
@@ -313,21 +311,21 @@ pa  0       640k      1024k
 <span class="c1">// Hint 3: look at inc/mmu.h for useful macros that mainipulate page</span>
 <span class="c1">// table and page directory entries.</span>
 <span class="c1">//</span>
-<span class="kt">pte_t</span> <span class="o">*</span>
-<span class="nf">pgdir_walk</span><span class="p">(</span><span class="kt">pde_t</span> <span class="o">*</span><span class="n">pgdir</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">va</span><span class="p">,</span> <span class="kt">int</span> <span class="n">create</span><span class="p">)</span>
+<span class="n">pte_t</span> <span class="o">*</span>
+<span class="nf">pgdir_walk</span><span class="p">(</span><span class="n">pde_t</span> <span class="o">*</span><span class="n">pgdir</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">va</span><span class="p">,</span> <span class="kt">int</span> <span class="n">create</span><span class="p">)</span>
 <span class="p">{</span>
-  <span class="kt">pde_t</span> <span class="o">*</span><span class="n">pde</span><span class="p">;</span>
-  <span class="kt">pte_t</span> <span class="o">*</span><span class="n">pgtab</span><span class="p">;</span>
+  <span class="n">pde_t</span> <span class="o">*</span><span class="n">pde</span><span class="p">;</span>
+  <span class="n">pte_t</span> <span class="o">*</span><span class="n">pgtab</span><span class="p">;</span>
   <span class="k">struct</span> <span class="n">PageInfo</span> <span class="o">*</span><span class="n">pp</span><span class="p">;</span>
 
   <span class="n">pde</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">pgdir</span><span class="p">[</span><span class="n">PDX</span><span class="p">(</span><span class="n">va</span><span class="p">)];</span>
   <span class="k">if</span> <span class="p">(</span><span class="o">*</span><span class="n">pde</span> <span class="o">&amp;</span> <span class="n">PTE_P</span><span class="p">)</span> <span class="p">{</span>
-    <span class="n">pgtab</span> <span class="o">=</span> <span class="p">(</span><span class="kt">pte_t</span><span class="o">*</span><span class="p">)</span><span class="n">KADDR</span><span class="p">(</span><span class="n">PTE_ADDR</span><span class="p">(</span><span class="o">*</span><span class="n">pde</span><span class="p">));</span>
+    <span class="n">pgtab</span> <span class="o">=</span> <span class="p">(</span><span class="n">pte_t</span><span class="o">*</span><span class="p">)</span><span class="n">KADDR</span><span class="p">(</span><span class="n">PTE_ADDR</span><span class="p">(</span><span class="o">*</span><span class="n">pde</span><span class="p">));</span>
   <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
     <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">create</span> <span class="o">||</span> <span class="p">(</span><span class="n">pp</span> <span class="o">=</span> <span class="n">page_alloc</span><span class="p">(</span><span class="n">ALLOC_ZERO</span><span class="p">))</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
       <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
     <span class="n">pp</span><span class="o">-&gt;</span><span class="n">pp_ref</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
-    <span class="n">pgtab</span> <span class="o">=</span> <span class="p">(</span><span class="kt">pte_t</span><span class="o">*</span><span class="p">)</span><span class="n">KADDR</span><span class="p">(</span><span class="n">page2pa</span><span class="p">(</span><span class="n">pp</span><span class="p">));</span>
+    <span class="n">pgtab</span> <span class="o">=</span> <span class="p">(</span><span class="n">pte_t</span><span class="o">*</span><span class="p">)</span><span class="n">KADDR</span><span class="p">(</span><span class="n">page2pa</span><span class="p">(</span><span class="n">pp</span><span class="p">));</span>
     <span class="o">*</span><span class="n">pde</span> <span class="o">=</span> <span class="n">PADDR</span><span class="p">(</span><span class="n">pgtab</span><span class="p">)</span> <span class="o">|</span> <span class="n">PTE_P</span> <span class="o">|</span> <span class="n">PTE_W</span> <span class="o">|</span> <span class="n">PTE_U</span><span class="p">;</span>
   <span class="p">}</span>
   <span class="k">return</span> <span class="o">&amp;</span><span class="n">pgtab</span><span class="p">[</span><span class="n">PTX</span><span class="p">(</span><span class="n">va</span><span class="p">)];</span>
@@ -337,7 +335,7 @@ pa  0       640k      1024k
 
 <p>在给pgtab赋值的时候，pgtab指向的是一个虚拟地址，然后通过h/w的mmu的转换，能够将pgtab指向的虚拟地址映射到我们想要让他映射到的实际的物理地址上就需要做KADDR这样的转换。</p>
 <p><strong>在page_insert中的一个trick : 如果已经有一个page 映射在va上，那么需要先将这个page删除掉，但是如果page_insert同一个va很多次的时候，每次都要删除这个page，更优雅的做法:</strong></p>
-<div class="highlight"><pre><span class="p">(</span><span class="n">pp</span><span class="o">-&gt;</span> <span class="n">pp_ref</span><span class="p">)</span> <span class="o">++</span><span class="p">;</span>
+<div class="highlight"><pre><span></span><span class="p">(</span><span class="n">pp</span><span class="o">-&gt;</span> <span class="n">pp_ref</span><span class="p">)</span> <span class="o">++</span><span class="p">;</span>
 <span class="k">if</span> <span class="p">(</span><span class="o">*</span><span class="n">pte</span> <span class="o">&amp;</span> <span class="n">PTE_P</span> <span class="p">)</span> 
   <span class="n">page_remove</span><span class="p">(</span><span class="n">pgdir</span><span class="p">,</span> <span class="n">va</span><span class="p">);</span>
 </pre></div>

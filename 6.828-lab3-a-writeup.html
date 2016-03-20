@@ -35,8 +35,6 @@
     <link href="http://zorksylar.github.io/theme/css/pygments/manni.css" rel="stylesheet">
     <link rel="stylesheet" href="http://zorksylar.github.io/theme/css/style.css" type="text/css"/>
 
-        <link href="http://zorksylar.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate"
-              title="Z's Thoughts ATOM Feed"/>
 
 
 
@@ -115,23 +113,23 @@ Z's Thoughts            </a>
 <ol>
 <li>在JOS里面， struct Env 相当于是 linux kernel 里面的 task_struct，用于表示一个task。</li>
 </ol>
-<div class="highlight"><pre><span class="k">struct</span> <span class="n">Env</span> <span class="p">{</span>
+<div class="highlight"><pre><span></span><span class="k">struct</span> <span class="n">Env</span> <span class="p">{</span>
   <span class="k">struct</span> <span class="n">Trapframe</span> <span class="n">env_tf</span><span class="p">;</span>  <span class="c1">// Saved registers</span>
   <span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span><span class="n">env_link</span><span class="p">;</span>   <span class="c1">// Next free Env</span>
-  <span class="kt">envid_t</span> <span class="n">env_id</span><span class="p">;</span>     <span class="c1">// Unique environment identifier</span>
-  <span class="kt">envid_t</span> <span class="n">env_parent_id</span><span class="p">;</span>    <span class="c1">// env_id of this env&#39;s parent</span>
+  <span class="n">envid_t</span> <span class="n">env_id</span><span class="p">;</span>     <span class="c1">// Unique environment identifier</span>
+  <span class="n">envid_t</span> <span class="n">env_parent_id</span><span class="p">;</span>    <span class="c1">// env_id of this env&#39;s parent</span>
   <span class="k">enum</span> <span class="n">EnvType</span> <span class="n">env_type</span><span class="p">;</span>    <span class="c1">// Indicates special system environments</span>
   <span class="kt">unsigned</span> <span class="n">env_status</span><span class="p">;</span>    <span class="c1">// Status of the environment</span>
   <span class="kt">uint32_t</span> <span class="n">env_runs</span><span class="p">;</span>    <span class="c1">// Number of times environment has run</span>
 
   <span class="c1">// Address space</span>
-  <span class="kt">pde_t</span> <span class="o">*</span><span class="n">env_pgdir</span><span class="p">;</span>   <span class="c1">// Kernel virtual address of page dir</span>
+  <span class="n">pde_t</span> <span class="o">*</span><span class="n">env_pgdir</span><span class="p">;</span>   <span class="c1">// Kernel virtual address of page dir</span>
 <span class="p">};</span>
 </pre></div>
 
 
 <p>其中的 env_tf 用于保存当这个env的中间状态，恢复这个trapframe 就能够按照之前中断的地方继续执行了。如，进程切换的时候，env_tf 中保存着 task 运行所需要的各种寄存器的值。其中的 packed 表示取消编译器对结构体的优化对齐，取消优化对齐，结构体的访问速度可能会降低，这样做是为了和 Intel IA32 Manual 里面的 trapframe 保持一致。</p>
-<div class="highlight"><pre><span class="k">struct</span> <span class="n">PushRegs</span> <span class="p">{</span>
+<div class="highlight"><pre><span></span><span class="k">struct</span> <span class="n">PushRegs</span> <span class="p">{</span>
   <span class="cm">/* registers as pushed by pusha */</span>
   <span class="kt">uint32_t</span> <span class="n">reg_edi</span><span class="p">;</span>
   <span class="kt">uint32_t</span> <span class="n">reg_esi</span><span class="p">;</span>
@@ -165,14 +163,14 @@ Z's Thoughts            </a>
 
 
 <p>为了管理所有的Env，在JOS里面，维护了三个变量:</p>
-<div class="highlight"><pre><span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span><span class="n">envs</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>    <span class="c1">// All environments</span>
+<div class="highlight"><pre><span></span><span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span><span class="n">envs</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>    <span class="c1">// All environments</span>
 <span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span><span class="n">curenv</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>    <span class="c1">// The current env</span>
 <span class="k">static</span> <span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span><span class="n">env_free_list</span><span class="p">;</span> <span class="c1">// Free environment list</span>
 </pre></div>
 
 
 <p>在 JOS 中，所有的 struct Env 都是通过 envs 这个全局的变量维护的，envs 是一个 struct Env 的数组。在 mem_init()的时候，同时初始化 envs。同时为了能够让 user 态能够访问自己的 Env ，所以需要在 kern_pgdir 中映射 UENVS 到 envs，同时权限是对 user RO 的。</p>
-<div class="highlight"><pre><span class="c1">// Make &#39;envs&#39; point to an array of size &#39;NENV&#39; of &#39;struct Env&#39;.</span>
+<div class="highlight"><pre><span></span><span class="c1">// Make &#39;envs&#39; point to an array of size &#39;NENV&#39; of &#39;struct Env&#39;.</span>
 <span class="c1">// LAB 3: Your code here.</span>
 <span class="n">envs</span> <span class="o">=</span> <span class="p">(</span><span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span><span class="p">)</span><span class="n">boot_alloc</span><span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="k">struct</span> <span class="n">Env</span><span class="p">)</span> <span class="o">*</span> <span class="n">NENV</span><span class="p">);</span>
 
@@ -189,7 +187,7 @@ Z's Thoughts            </a>
 <h3>Exercise 2</h3>
 <h4>2.1 env_init()</h4>
 <p>在2中已经分配的 envs，env_init() 作用就是对 envs 数组 env_free_list 初始化。为了保证第一次调用 env_alloc() 的时候，能够返回的是 envs[0], 所以注意循环的顺序。</p>
-<div class="highlight"><pre><span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="kt">void</span>
 <span class="nf">env_init</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="c1">// Set up envs array</span>
@@ -216,7 +214,7 @@ Z's Thoughts            </a>
 
 <h4>2.2 env_setup_vm()</h4>
 <p>对于一个给定的 env ，初始化它的 env_pgdir，也就是虚拟地址空间。在这里注意需要将 kern_pgdir 作为模板初始化 env_pgdir ，这样做的原因是为了能够当在 kernel 态，访问 user 态的一个虚拟地址的时候，只要将页表切换为 user 的页表，同时能够保证 kernel 的代码能够继续执行。注意 kern_pgidr 权限的控制。</p>
-<div class="highlight"><pre><span class="k">static</span> <span class="kt">int</span>
+<div class="highlight"><pre><span></span><span class="k">static</span> <span class="kt">int</span>
 <span class="nf">env_setup_vm</span><span class="p">(</span><span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span><span class="n">e</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="kt">int</span> <span class="n">i</span><span class="p">;</span>
@@ -238,7 +236,7 @@ Z's Thoughts            </a>
 
 <h4>2.3 region_alloc()</h4>
 <p>在给定的 env 上，分配物理页，映射到给定的虚拟地址上。物理页不用 memset 为0。</p>
-<div class="highlight"><pre><span class="k">static</span> <span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="k">static</span> <span class="kt">void</span>
 <span class="nf">region_alloc</span><span class="p">(</span><span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span><span class="n">e</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">va</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">len</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="n">va</span> <span class="o">=</span> <span class="n">ROUNDDOWN</span><span class="p">(</span><span class="n">va</span><span class="p">,</span> <span class="n">PGSIZE</span><span class="p">);</span>
@@ -260,7 +258,7 @@ Z's Thoughts            </a>
 
 <h4>2.4 load_icode()</h4>
 <p>将一个ELF文件 load 到内存中,关于 ELF 文件的格式,可以参考 <strong><a href="http://pdos.csail.mit.edu/6.828/2012/readings/elf.pdf">这里</a></strong>.ELF 文件是有一个elfhdr，里面记录了Proghdr。elfhdr-&gt;e_phnum 表示有多少个Proghdr，最开始的Proghdr 的为值通过 elfhdr-&gt;e_phoff 这个偏移量给出。对于每个 Proghdr，只有 p_type 是 ELF_PROG_LOAD 的表示可以 load 到内存中。同时 Proghdr-&gt;p_memsz 表示占用内存的大小， Proghdr-&gt;p_filesz 表示 在Proghdr的大小，这两个可以不一样，memsz - filesz 就是 BSS 段的大小，所以在初始化的时候，需要将 BSS 段清零。 Proghdr-&gt;p_va 表示这段对应的虚拟地址。 初始化 va 对应的 PTE。</p>
-<div class="highlight"><pre><span class="k">static</span> <span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="k">static</span> <span class="kt">void</span>
 <span class="nf">load_icode</span><span class="p">(</span><span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span><span class="n">e</span><span class="p">,</span> <span class="kt">uint8_t</span> <span class="o">*</span><span class="n">binary</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">size</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="k">struct</span> <span class="n">Proghdr</span> <span class="o">*</span><span class="n">ph</span><span class="p">,</span> <span class="o">*</span><span class="n">eph</span><span class="p">;</span>
@@ -300,7 +298,7 @@ Z's Thoughts            </a>
 
 <h4>2.5 env_create()</h4>
 <p>通过 env_alloc 从 env_free_list 上分配 env 所需要的空间，初始化其中的一些状态信息（除了 env_pgdir 之外的信息）。调用 load_icode 将 ELF load 到对应的虚拟地址空间上。同时初始化对应的PTE。</p>
-<div class="highlight"><pre><span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="kt">void</span>
 <span class="nf">env_create</span><span class="p">(</span><span class="kt">uint8_t</span> <span class="o">*</span><span class="n">binary</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">size</span><span class="p">,</span> <span class="k">enum</span> <span class="n">EnvType</span> <span class="n">type</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="c1">// LAB 3: Your code here.</span>
@@ -317,7 +315,7 @@ Z's Thoughts            </a>
 
 <h4>2.6 env_run()</h4>
 <p>更新 curenv，因为在第一个 env run 之前， curenv 为 NULL，需要加上判断 NULL 的情况。然后替换页表，替换各种寄存器，让新的env从上次中断的地方继续执行，调用 env_pop_tf 之后，就不会再返回，直接执行 env 的程序。</p>
-<div class="highlight"><pre><span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="kt">void</span>
 <span class="nf">env_run</span><span class="p">(</span><span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span><span class="n">e</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="c1">// Step 1</span>
@@ -337,7 +335,7 @@ Z's Thoughts            </a>
 
 
 <p>env_pop_tf ： 用 tf 的地址赋值给esp，从trapframe上恢复 struct PushRegs 和 ES， DS。然后跳过trapno 和 errcode，然后对于这个trap 是否又 特权等级的变化，IRET 指令能够处理（参考Intel Instruction Set Reference A-M 中的IRET指令的说明)。简而言之就是，iret 会从栈上pop出 eip 和 cs，然后从这个地方开始执行。</p>
-<div class="highlight"><pre><span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="kt">void</span>
 <span class="nf">env_pop_tf</span><span class="p">(</span><span class="k">struct</span> <span class="n">Trapframe</span> <span class="o">*</span><span class="n">tf</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="kr">__asm</span> <span class="n">__volatile</span><span class="p">(</span><span class="s">&quot;movl %0,%%esp</span><span class="se">\n</span><span class="s">&quot;</span>
@@ -355,7 +353,7 @@ Z's Thoughts            </a>
 <h3>Exercise 4</h3>
 <h4>4.1 初始化 IDT</h4>
 <p>在 trapentry.S 中初始化中断处理函数，根据是否有Error Code，中断处理函数分为两种 TRAPHANDLER_NOEC 和 TRAPHANDLER。看代码发现其本质就是 初始化 trapframe 中的 tf_trapno 和 tf_err 字段，然后，跳到 _alltraps 统一处理。</p>
-<div class="highlight"><pre><span class="cp">#define TRAPHANDLER(name, num)            \</span>
+<div class="highlight"><pre><span></span><span class="cp">#define TRAPHANDLER(name, num)            \</span>
 <span class="cp">  .globl name;    </span><span class="cm">/* define global symbol for &#39;name&#39; */</span><span class="cp"> \</span>
 <span class="cp">  .type name, @function;  </span><span class="cm">/* symbol type is function */</span><span class="cp">   \</span>
 <span class="cp">  .align 2;   </span><span class="cm">/* align function definition */</span><span class="cp">   \</span>
@@ -375,7 +373,7 @@ Z's Thoughts            </a>
 
 
 <p>所以中断处理函数 通过查 Intel 的 中断那节的 Manual 可以这样：</p>
-<div class="highlight"><pre><span class="cm">/*</span>
+<div class="highlight"><pre><span></span><span class="cm">/*</span>
 <span class="cm"> * Lab 3: Your code here for generating entry points for the different traps.</span>
 <span class="cm"> */</span>
 <span class="c1">// check if has error code : http://pdos.csail.mit.edu/6.828/2012/readings/i386/s09_06.htm</span>
@@ -390,7 +388,7 @@ Z's Thoughts            </a>
 
 
 <p>对于 _alltraps 函数，因为 trapframe 的 eip , cs 及后面的字段都是硬件保存了，所以我们只要保存PushRegs 和 ds es 就可以。</p>
-<div class="highlight"><pre><span class="p">.</span><span class="n">global</span> <span class="n">_alltraps</span>
+<div class="highlight"><pre><span></span><span class="p">.</span><span class="n">global</span> <span class="n">_alltraps</span>
 <span class="nl">_alltraps</span> <span class="p">:</span>
   <span class="c1">// Build trap frame as an argument of trap(struct Trapframe *tf)</span>
   <span class="c1">// in trap.c , trapno and error code are set up by TRAPHANDLER</span>
@@ -414,7 +412,7 @@ Z's Thoughts            </a>
 
 
 <p>初始化 IDT </p>
-<div class="highlight"><pre><span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="kt">void</span>
 <span class="nf">trap_init</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="k">extern</span> <span class="k">struct</span> <span class="n">Segdesc</span> <span class="n">gdt</span><span class="p">[];</span>

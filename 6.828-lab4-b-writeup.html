@@ -35,8 +35,6 @@
     <link href="http://zorksylar.github.io/theme/css/pygments/manni.css" rel="stylesheet">
     <link rel="stylesheet" href="http://zorksylar.github.io/theme/css/style.css" type="text/css"/>
 
-        <link href="http://zorksylar.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate"
-              title="Z's Thoughts ATOM Feed"/>
 
 
 
@@ -139,8 +137,8 @@ Z's Thoughts            </a>
 </blockquote>
 <h4>Exercise 8</h4>
 <p>实现 sys_env_set_pgfault_upcall 系统调用，user 注册upcall函数，在lab4中，struct Env 中添加成员 env_pgfault_upcall，用于记录用户注册的upcall函数在user地址空间的地址。注意各种参数检查。   </p>
-<div class="highlight"><pre><span class="k">static</span> <span class="kt">int</span>
-<span class="nf">sys_env_set_pgfault_upcall</span><span class="p">(</span><span class="kt">envid_t</span> <span class="n">envid</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">func</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><span class="k">static</span> <span class="kt">int</span>
+<span class="nf">sys_env_set_pgfault_upcall</span><span class="p">(</span><span class="n">envid_t</span> <span class="n">envid</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">func</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="kt">int</span> <span class="n">ret</span><span class="p">;</span>
   <span class="k">struct</span> <span class="n">Env</span> <span class="o">*</span> <span class="n">env</span><span class="p">;</span>
@@ -172,7 +170,7 @@ Z's Thoughts            </a>
 <li>normal user stack : user正常执行使用的栈。 </li>
 <li>exception stack : 在产生一个中断之后，user执行user注册的中断函数的栈。</li>
 </ul>
-<div class="highlight"><pre><span class="cm">/*</span>
+<div class="highlight"><pre><span></span><span class="cm">/*</span>
 <span class="cm"> * UTOP,UENVS ------&gt;  +------------------------------+ 0xeec00000</span>
 <span class="cm"> * UXSTACKTOP -/       |     User Exception Stack     | RW/RW  PGSIZE</span>
 <span class="cm"> *                     +------------------------------+ 0xeebff000</span>
@@ -201,7 +199,7 @@ Z's Thoughts            </a>
 <h4>Exercise 9</h4>
 <p>实现page_fault_handler函数，如果user注册了upcall函数，那么建立upcall函数的UTrapframe，使得当返回到user态执行的时候，在UXSTACK上执行user的upcall(UTrapframe)。</p>
 <p>Utrapframe中，保存了在trap的时候，user env的状态，使得能够当upcall函数执行结束之后，返回到在trap之前的执行状态。</p>
-<div class="highlight"><pre><span class="k">struct</span> <span class="n">UTrapframe</span> <span class="p">{</span>
+<div class="highlight"><pre><span></span><span class="k">struct</span> <span class="n">UTrapframe</span> <span class="p">{</span>
   <span class="cm">/* information about the fault */</span>
   <span class="kt">uint32_t</span> <span class="n">utf_fault_va</span><span class="p">;</span>  <span class="cm">/* va for T_PGFLT, 0 otherwise */</span>
   <span class="kt">uint32_t</span> <span class="n">utf_err</span><span class="p">;</span>
@@ -238,7 +236,7 @@ Z's Thoughts            </a>
 <li>如果trap之前，env是执行在normal user stack上，那么直接在UXTSTACKTOP上插入UTrapframe。</li>
 <li>如果trap之前，env是执行在exception stack上，那么需要在UXSTACK上push UTrapframe之前，要先push 32bit的空值。为什么这样做后面会看到。</li>
 </ul>
-<div class="highlight"><pre><span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="kt">void</span>
 <span class="nf">page_fault_handler</span><span class="p">(</span><span class="k">struct</span> <span class="n">Trapframe</span> <span class="o">*</span><span class="n">tf</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="kt">uint32_t</span> <span class="n">fault_va</span><span class="p">;</span>
@@ -319,7 +317,7 @@ Z's Thoughts            </a>
 <li>如果trap之前，是执行在exception stack上，那么trap-time-eip位置在Utrapframe之间留出的 4B 上。</li>
 </ul>
 <p>这样，在恢复trap-time-esp的时候，第一个弹出的一定是trap-time-eip。</p>
-<div class="highlight"><pre><span class="p">.</span><span class="n">text</span>
+<div class="highlight"><pre><span></span><span class="p">.</span><span class="n">text</span>
 <span class="p">.</span><span class="n">globl</span> <span class="n">_pgfault_upcall</span>
 <span class="nl">_pgfault_upcall</span><span class="p">:</span>
   <span class="c1">// Call the C page fault handler.</span>
@@ -427,7 +425,7 @@ Z's Thoughts            </a>
 
 <h4>Exercise 11</h4>
 <p>实现lib对set_pgfault_handler的包装。handler是用户输入的upcall函数，_pgfault_upcall是lib包装的函数。   </p>
-<div class="highlight"><pre><span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="kt">void</span>
 <span class="nf">set_pgfault_handler</span><span class="p">(</span><span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">handler</span><span class="p">)(</span><span class="k">struct</span> <span class="n">UTrapframe</span> <span class="o">*</span><span class="n">utf</span><span class="p">))</span>
 <span class="p">{</span>
   <span class="kt">int</span> <span class="n">r</span><span class="p">;</span>
@@ -454,7 +452,7 @@ Z's Thoughts            </a>
 <h4>Something need to know</h4>
 <p>JOS页表涉及的一个trick：
 在kern/init.c 中mem_init()的时候，初始化kern_pgdir有这样一行:</p>
-<div class="highlight"><pre><span class="cm">/* 关于UVPT, PTSIZE = (PGSIZE*NPTENTRIES)</span>
+<div class="highlight"><pre><span></span><span class="cm">/* 关于UVPT, PTSIZE = (PGSIZE*NPTENTRIES)</span>
 <span class="cm"> * ULIM, MMIOBASE --&gt;  +------------------------------+ 0xef800000</span>
 <span class="cm"> *                     |  Cur. Page Table (User R-)   | R-/R-  PTSIZE</span>
 <span class="cm"> *    UVPT      ----&gt;  +------------------------------+ 0xef400000</span>
@@ -470,7 +468,7 @@ Z's Thoughts            </a>
 
 
 <p>在env_setup_vm 的时候，复制了kern_pgdir中初始化的一部分page_dir( &gt; UTOP),同时将UVPT这个虚拟地址指向了env_pgdir。</p>
-<div class="highlight"><pre><span class="n">memmove</span><span class="p">(</span><span class="n">e</span><span class="o">-&gt;</span><span class="n">env_pgdir</span><span class="p">,</span> <span class="n">kern_pgdir</span><span class="p">,</span> <span class="n">PGSIZE</span><span class="p">);</span>
+<div class="highlight"><pre><span></span><span class="n">memmove</span><span class="p">(</span><span class="n">e</span><span class="o">-&gt;</span><span class="n">env_pgdir</span><span class="p">,</span> <span class="n">kern_pgdir</span><span class="p">,</span> <span class="n">PGSIZE</span><span class="p">);</span>
 <span class="c1">// UVPT maps the env&#39;s own page table read-only.</span>
 <span class="c1">// Permissions: kernel R, user R</span>
 <span class="n">e</span><span class="o">-&gt;</span><span class="n">env_pgdir</span><span class="p">[</span><span class="n">PDX</span><span class="p">(</span><span class="n">UVPT</span><span class="p">)]</span> <span class="o">=</span> <span class="n">PADDR</span><span class="p">(</span><span class="n">e</span><span class="o">-&gt;</span><span class="n">env_pgdir</span><span class="p">)</span> <span class="o">|</span> <span class="n">PTE_P</span> <span class="o">|</span> <span class="n">PTE_U</span><span class="p">;</span>  <span class="c1">// (1)</span>
@@ -478,7 +476,7 @@ Z's Thoughts            </a>
 
 
 <p>在lib/entry.S中定义了如下几个全局变量：</p>
-<div class="highlight"><pre><span class="p">.</span><span class="n">data</span>
+<div class="highlight"><pre><span></span><span class="p">.</span><span class="n">data</span>
 <span class="c1">// Define the global symbols &#39;envs&#39;, &#39;pages&#39;, &#39;uvpt&#39;, and &#39;uvpd&#39;</span>
 <span class="c1">// so that they can be used in C as if they were ordinary global arrays.</span>
   <span class="p">.</span><span class="n">globl</span> <span class="n">envs</span>
@@ -500,7 +498,7 @@ Z's Thoughts            </a>
 <p><strong>为什么 uvpt[PGNUM(va)]就是 va对应的pte的内容？</strong> <br />
 首先，<code>uvpt[PGNUM(va)] = uvpt + PGNUM(va) * sizeof(uvpt)</code>， 因为uvpt 是 pte_t* 类型的，所以 <br />
 <code>uvpt[PGNUM(va)] = uvpt + PGNUM(va)&lt;&lt;2</code>，<code>uvpt = 0xEF40000</code>，也就是说低22位都是0。   </p>
-<div class="highlight"><pre>31            22|21             12 | 11       2| 1 0 | 
+<div class="highlight"><pre><span></span>31            22|21             12 | 11       2| 1 0 | 
    PDX(UVPT)    |    PDX(va)       |  PTX(va)  |     |
       a1        |        a2        |     a3    |     |
 </pre></div>
@@ -515,7 +513,7 @@ Z's Thoughts            </a>
 <p><strong>为什么 uvpd这个虚拟地址指向的就是env_pgdir的物理页？</strong> <br />
 <code>UVPT+(UVPT&gt;&gt;12)*4</code>和<code>UVPT+(UVPT&gt;&gt;10)</code>的区别是:前者能够将第10，11位清零。  <br />
 uvpd 的值就是:</p>
-<div class="highlight"><pre>31            22|21             12 | 11         0 | 
+<div class="highlight"><pre><span></span>31            22|21             12 | 11         0 | 
    PDX(UVPT)    |    PDX(UVPT)     |       0      |
       a1        |        a2        |              |
 </pre></div>
@@ -531,9 +529,9 @@ uvpd 的值就是:</p>
 <h4>Exercise 12</h4>
 <p>实现 COW fork，当fork的时候调用duppage将PTE设置为COW，如果当写一个COW的页的时候，产生PGFLT，通过pgfault函数实现COW。 <br />
 注意检查pde是否是PTE_P的。记得把parent env 的page 也设为 PTE_COW, 相当于清除PTE_W，PTE_COW 是software defined。</p>
-<div class="highlight"><pre><span class="c1">// lib/fork.c</span>
+<div class="highlight"><pre><span></span><span class="c1">// lib/fork.c</span>
 <span class="k">static</span> <span class="kt">int</span>
-<span class="nf">duppage</span><span class="p">(</span><span class="kt">envid_t</span> <span class="n">envid</span><span class="p">,</span> <span class="kt">unsigned</span> <span class="n">pn</span><span class="p">)</span>
+<span class="nf">duppage</span><span class="p">(</span><span class="n">envid_t</span> <span class="n">envid</span><span class="p">,</span> <span class="kt">unsigned</span> <span class="n">pn</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="kt">int</span> <span class="n">r</span><span class="p">;</span>
   <span class="kt">void</span> <span class="o">*</span> <span class="n">va</span> <span class="o">=</span> <span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="p">)</span> <span class="p">(</span><span class="n">pn</span> <span class="o">&lt;&lt;</span> <span class="n">PGSHIFT</span><span class="p">);</span>
@@ -568,7 +566,7 @@ uvpd 的值就是:</p>
 <li><code>page_map(env_tmp_va, va)</code></li>
 <li><code>page_ummap(env_tmp_va)</code></li>
 </ol>
-<div class="highlight"><pre><span class="k">static</span> <span class="kt">void</span>
+<div class="highlight"><pre><span></span><span class="k">static</span> <span class="kt">void</span>
 <span class="nf">pgfault</span><span class="p">(</span><span class="k">struct</span> <span class="n">UTrapframe</span> <span class="o">*</span><span class="n">utf</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="kt">void</span> <span class="o">*</span><span class="n">addr</span> <span class="o">=</span> <span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="p">)</span> <span class="n">utf</span><span class="o">-&gt;</span><span class="n">utf_fault_va</span><span class="p">;</span>
@@ -605,10 +603,10 @@ uvpd 的值就是:</p>
 
 
 <p>所以fork就成这样了</p>
-<div class="highlight"><pre><span class="kt">envid_t</span>
+<div class="highlight"><pre><span></span><span class="n">envid_t</span>
 <span class="nf">fork</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
 <span class="p">{</span>
-  <span class="kt">envid_t</span> <span class="n">envid</span><span class="p">;</span>
+  <span class="n">envid_t</span> <span class="n">envid</span><span class="p">;</span>
   <span class="kt">uintptr_t</span> <span class="n">va</span><span class="p">;</span>
   <span class="kt">int</span> <span class="n">r</span><span class="p">;</span>
 
