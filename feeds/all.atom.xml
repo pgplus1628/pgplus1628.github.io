@@ -1,5 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Z's Thoughts</title><link href="http://zorksylar.github.io/" rel="alternate"></link><link href="http://zorksylar.github.io/feeds/all.atom.xml" rel="self"></link><id>http://zorksylar.github.io/</id><updated>2016-03-20T00:00:00+08:00</updated><entry><title>Mapping Continuous Virtual Address to NUMA Nodes</title><link href="http://zorksylar.github.io/numa-mmap.html" rel="alternate"></link><updated>2016-03-20T00:00:00+08:00</updated><author><name>zorksylar</name></author><id>tag:zorksylar.github.io,2016-03-20:numa-mmap.html</id><summary type="html">&lt;h3&gt;Background and Issues&lt;/h3&gt;
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Z's Thoughts</title><link href="http://zorksylar.github.io/" rel="alternate"></link><link href="http://zorksylar.github.io/feeds/all.atom.xml" rel="self"></link><id>http://zorksylar.github.io/</id><updated>2016-05-24T00:00:00+08:00</updated><entry><title>一只孤独的船</title><link href="http://zorksylar.github.io/the-sail.html" rel="alternate"></link><updated>2016-05-24T00:00:00+08:00</updated><author><name>zorksylar</name></author><id>tag:zorksylar.github.io,2016-05-24:the-sail.html</id><summary type="html">&lt;blockquote&gt;
+&lt;h2&gt;一只孤独的船&lt;/h2&gt;
+&lt;p&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp; ---莱蒙托夫&lt;/p&gt;
+&lt;p&gt;一只船孤独地航行在海上，&lt;/p&gt;
+&lt;p&gt;它既不寻求幸福，&lt;/p&gt;
+&lt;p&gt;也不逃避幸福，&lt;/p&gt;
+&lt;p&gt;它只是向前航行，&lt;/p&gt;
+&lt;p&gt;底下是沉静碧蓝的大海，&lt;/p&gt;
+&lt;p&gt;而头顶是金色的太阳。&lt;/p&gt;
+&lt;p&gt;将要直面的，&lt;/p&gt;
+&lt;p&gt;与已成过往的，&lt;/p&gt;
+&lt;p&gt;较之深埋于它内心的 皆为微沫。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;Memory sealed.&lt;/p&gt;
+&lt;p&gt;--EOF--&lt;/p&gt;</summary><category term="[Life]"></category></entry><entry><title>Mapping Continuous Virtual Address to NUMA Nodes</title><link href="http://zorksylar.github.io/numa-mmap.html" rel="alternate"></link><updated>2016-03-20T00:00:00+08:00</updated><author><name>zorksylar</name></author><id>tag:zorksylar.github.io,2016-03-20:numa-mmap.html</id><summary type="html">&lt;h3&gt;Background and Issues&lt;/h3&gt;
 &lt;p&gt;Nowadays, NUMA(Non-Uniform Memory Access) processor is common in data-center. In NUMA architecture, different CPU has its local memory and they are interconnected by QPI(Quick Path Interconnect). A processor can access its local memory faster than non-local memory.&lt;/p&gt;
 &lt;p&gt;Distribute datasets among NUMA nodes is one of the optimizations used to improve application performance. Considering that there is an array, and it is shared between &lt;em&gt;N&lt;/em&gt; NUMA nodes. One way to map this array to NUMA nodes is to create &lt;em&gt;N&lt;/em&gt; pointers, each of them points to one partition of this array.&lt;/p&gt;
 &lt;p&gt;When accessing elements with the index in the original data. An extra address mapping as the following codes shows.&lt;/p&gt;
