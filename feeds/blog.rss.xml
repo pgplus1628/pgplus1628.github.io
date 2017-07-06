@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Z's Thoughts</title><link>http://zorksylar.github.io/</link><description></description><atom:link href="http://zorksylar.github.io/feeds/blog.rss.xml" rel="self"></atom:link><lastBuildDate>Sun, 20 Mar 2016 00:00:00 +0800</lastBuildDate><item><title>Mapping Continuous Virtual Address to NUMA Nodes</title><link>http://zorksylar.github.io/numa-mmap.html</link><description>&lt;h3&gt;Background and Issues&lt;/h3&gt;
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>PG's Thoughts</title><link>http://zorksylar.github.io/</link><description></description><atom:link href="http://zorksylar.github.io/feeds/blog.rss.xml" rel="self"></atom:link><lastBuildDate>Sun, 20 Mar 2016 00:00:00 +0800</lastBuildDate><item><title>Mapping Continuous Virtual Address to NUMA Nodes</title><link>http://zorksylar.github.io/numa-mmap.html</link><description>&lt;h3&gt;Background and Issues&lt;/h3&gt;
 &lt;p&gt;Nowadays, NUMA(Non-Uniform Memory Access) processor is common in data-center. In NUMA architecture, different CPU has its local memory and they are interconnected by QPI(Quick Path Interconnect). A processor can access its local memory faster than non-local memory.&lt;/p&gt;
 &lt;p&gt;Distribute datasets among NUMA nodes is one of the optimizations used to improve application performance. Considering that there is an array, and it is shared between &lt;em&gt;N&lt;/em&gt; NUMA nodes. One way to map this array to NUMA nodes is to create &lt;em&gt;N&lt;/em&gt; pointers, each of them points to one partition of this array.&lt;/p&gt;
 &lt;p&gt;When accessing elements with the index in the original data. An extra address mapping as the following codes shows.&lt;/p&gt;
@@ -43,7 +43,7 @@ Then, apply &lt;code&gt;numa_tonode_memory&lt;/code&gt; to bind virtual address 
 &lt;/pre&gt;&lt;/div&gt;
 
 
-&lt;p&gt;-- EOF --&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">zorksylar</dc:creator><pubDate>Sun, 20 Mar 2016 00:00:00 +0800</pubDate><guid>tag:zorksylar.github.io,2016-03-20:numa-mmap.html</guid><category>[NUMA</category><category>mmap]</category></item><item><title>Implementing Event Polling in Multi-Thread Environment with eventfd and epoll</title><link>http://zorksylar.github.io/epoll-eventfd.html</link><description>&lt;h3&gt;Poll/Notify Thread Synchronization Model in Multi-Thread Environment&lt;/h3&gt;
+&lt;p&gt;-- EOF --&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">pgplus1628</dc:creator><pubDate>Sun, 20 Mar 2016 00:00:00 +0800</pubDate><guid>tag:zorksylar.github.io,2016-03-20:numa-mmap.html</guid><category>[NUMA</category><category>mmap]</category></item><item><title>Implementing Event Polling in Multi-Thread Environment with eventfd and epoll</title><link>http://zorksylar.github.io/epoll-eventfd.html</link><description>&lt;h3&gt;Poll/Notify Thread Synchronization Model in Multi-Thread Environment&lt;/h3&gt;
 &lt;p&gt;In most cases, we need to implement thread synchronization mechanism in the following manner: There are &lt;em&gt;W&lt;/em&gt; &lt;strong&gt;Workers&lt;/strong&gt;, and each worker communicates with each other through message passing. There is a &lt;strong&gt;Coordinator&lt;/strong&gt; in each &lt;strong&gt;Worker&lt;/strong&gt;, which is in charge of message sending and dispatching. Specifically, &lt;strong&gt;Sender&lt;/strong&gt; and &lt;strong&gt;Receiver&lt;/strong&gt; in Coordinator are for message sending and receiving. When one message arrived, Receiver should trigger an event according to the content of this message, and pass this event to &lt;strong&gt;Worker&lt;/strong&gt; to do some user defined event handling.&lt;/p&gt;
 &lt;p&gt;Each Receiver maintains a &lt;strong&gt;channel&lt;/strong&gt;(message buffer) for each Sender. There are &lt;em&gt;W&lt;/em&gt; Workers, and there should be &lt;em&gt;W&lt;/em&gt; channels for each Receiver. In the Receiver side, a listening-thread is needed to poll on these channels. Mostly, we do not want to waste CPU cycles on the listening-thread. We need a &lt;strong&gt;Poll/Notify&lt;/strong&gt; mechanism to wake up the listening thread in Receiver when a channel is ready to read. I.E, when there is no channel available, the listening-thread should be blocked.&lt;/p&gt;
 &lt;p&gt;This model is useful in many cases, such as user-space network protocol implementation, and message passing between NUMA nodes(like this paper :&lt;em&gt;GraM: Scaling Graph Computation to the Trillions&lt;/em&gt; does).&lt;/p&gt;
@@ -292,7 +292,7 @@ Then, apply &lt;code&gt;numa_tonode_memory&lt;/code&gt; to bind virtual address 
 
     &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
 &lt;span class="p"&gt;}&lt;/span&gt;
-&lt;/pre&gt;&lt;/div&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">zorksylar</dc:creator><pubDate>Wed, 17 Feb 2016 00:00:00 +0800</pubDate><guid>tag:zorksylar.github.io,2016-02-17:epoll-eventfd.html</guid><category>[eventfd</category><category>parallel]</category></item><item><title>6.828 Lab4 PartC 小结</title><link>http://zorksylar.github.io/6.828-lab4-c-writeup.html</link><description>&lt;h3&gt;Preemptive Multitasking and Inter-Process communication&lt;/h3&gt;
+&lt;/pre&gt;&lt;/div&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">pgplus1628</dc:creator><pubDate>Wed, 17 Feb 2016 00:00:00 +0800</pubDate><guid>tag:zorksylar.github.io,2016-02-17:epoll-eventfd.html</guid><category>[eventfd</category><category>parallel]</category></item><item><title>6.828 Lab4 PartC 小结</title><link>http://zorksylar.github.io/6.828-lab4-c-writeup.html</link><description>&lt;h3&gt;Preemptive Multitasking and Inter-Process communication&lt;/h3&gt;
 &lt;p&gt;PartC 任务是实现一个抢占式的多任务处理和进程间通信。
 Concepts: &lt;code&gt;interrupt&lt;/code&gt;, &lt;code&gt;ipc&lt;/code&gt;, &lt;code&gt;preemptive_multitasking&lt;/code&gt;.&lt;/p&gt;
 &lt;h3&gt;Exercise 13,14&lt;/h3&gt;
@@ -551,7 +551,7 @@ Trap 和 Interrupt 的区别：&lt;/p&gt;
 &lt;/pre&gt;&lt;/div&gt;
 
 
-&lt;p&gt;-- EOF --&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">zorksylar</dc:creator><pubDate>Sun, 08 Sep 2013 00:00:00 +0800</pubDate><guid>tag:zorksylar.github.io,2013-09-08:6.828-lab4-c-writeup.html</guid><category>[6.828</category><category>OS]</category></item><item><title>6.828 Lab4 PartB 小结</title><link>http://zorksylar.github.io/6.828-lab4-b-writeup.html</link><description>&lt;h3&gt;Copy-on-Write Fork&lt;/h3&gt;
+&lt;p&gt;-- EOF --&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">pgplus1628</dc:creator><pubDate>Sun, 08 Sep 2013 00:00:00 +0800</pubDate><guid>tag:zorksylar.github.io,2013-09-08:6.828-lab4-c-writeup.html</guid><category>[6.828</category><category>OS]</category></item><item><title>6.828 Lab4 PartB 小结</title><link>http://zorksylar.github.io/6.828-lab4-b-writeup.html</link><description>&lt;h3&gt;Copy-on-Write Fork&lt;/h3&gt;
 &lt;p&gt;Concepts: &lt;code&gt;copy_on_write&lt;/code&gt;, &lt;code&gt;fork&lt;/code&gt;, &lt;code&gt;upcall&lt;/code&gt;, &lt;code&gt;page_fault&lt;/code&gt;, &lt;code&gt;scheduler_activation&lt;/code&gt;.&lt;/p&gt;
 &lt;h3&gt;PartB 部分说明&lt;/h3&gt;
 &lt;p&gt;Copy-on-Write Fork。基本思想是parent env fork son env的时候对于parent的地址空间上的内容，不是在son env上新建一个物理页然后从parent env 上复制物理页到这个新建的物理页上，而是复制va-&amp;gt;pa 的mapping，这样就有两个va 映射到一个pa上，两个va共享一个pa，同时需要把这个物理页标记为RO的(在两个env的PTE上标记)，当要修改这个物理页的时候，会产生PGFLT。再在 trap 处理函数中新建一个物理页使用。   &lt;/p&gt;
@@ -1110,7 +1110,7 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;/pre&gt;&lt;/div&gt;
 
 
-&lt;p&gt;-- EOF --&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">zorksylar</dc:creator><pubDate>Sat, 24 Aug 2013 00:00:00 +0800</pubDate><guid>tag:zorksylar.github.io,2013-08-24:6.828-lab4-b-writeup.html</guid><category>[6.828</category><category>OS]</category></item><item><title>6.828 Lab4 PartA 小结</title><link>http://zorksylar.github.io/6.828-lab4-a-writeup.html</link><description>&lt;h3&gt;Multiprocessor Support and Cooperative Multitasking&lt;/h3&gt;
+&lt;p&gt;-- EOF --&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">pgplus1628</dc:creator><pubDate>Sat, 24 Aug 2013 00:00:00 +0800</pubDate><guid>tag:zorksylar.github.io,2013-08-24:6.828-lab4-b-writeup.html</guid><category>[6.828</category><category>OS]</category></item><item><title>6.828 Lab4 PartA 小结</title><link>http://zorksylar.github.io/6.828-lab4-a-writeup.html</link><description>&lt;h3&gt;Multiprocessor Support and Cooperative Multitasking&lt;/h3&gt;
 &lt;p&gt;In this secion we will introduce the following concepts : &lt;code&gt;mmio&lt;/code&gt;, &lt;code&gt;vma&lt;/code&gt;, &lt;code&gt;lma&lt;/code&gt;, &lt;code&gt;elf&lt;/code&gt;, and &lt;code&gt;apic&lt;/code&gt;.&lt;/p&gt;
 &lt;h3&gt;PartA部分说明&lt;/h3&gt;
 &lt;p&gt;前面的几个Lab只能支持单核，Lab4的PartA就是在之前的基础上，加上多核的扩展。主要工作是两方面 ：
@@ -1288,7 +1288,7 @@ uvpd 的值就是:&lt;/p&gt;
   &lt;span class="c1"&gt;// It also serializes, so that reads after acquire are not&lt;/span&gt;
   &lt;span class="c1"&gt;// reordered before it. &lt;/span&gt;
   &lt;span class="k"&gt;while&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;xchg&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;lk&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;locked&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;!=&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-    &lt;span class="n"&gt;asm&lt;/span&gt; &lt;span class="k"&gt;volatile&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;&amp;quot;pause&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
+    &lt;span class="k"&gt;asm&lt;/span&gt; &lt;span class="k"&gt;volatile&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;&amp;quot;pause&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
 
   &lt;span class="c1"&gt;// Record info about lock acquisition for debugging.&lt;/span&gt;
 &lt;span class="cp"&gt;#ifdef DEBUG_SPINLOCK&lt;/span&gt;
@@ -1303,7 +1303,7 @@ uvpd 的值就是:&lt;/p&gt;
   &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;result&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
 
   &lt;span class="c1"&gt;// The + in &amp;quot;+m&amp;quot; denotes a read-modify-write operand.&lt;/span&gt;
-  &lt;span class="n"&gt;asm&lt;/span&gt; &lt;span class="k"&gt;volatile&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;&amp;quot;lock; xchgl %0, %1&amp;quot;&lt;/span&gt; &lt;span class="o"&gt;:&lt;/span&gt;
+  &lt;span class="k"&gt;asm&lt;/span&gt; &lt;span class="k"&gt;volatile&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;&amp;quot;lock; xchgl %0, %1&amp;quot;&lt;/span&gt; &lt;span class="o"&gt;:&lt;/span&gt;
       &lt;span class="s"&gt;&amp;quot;+m&amp;quot;&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;addr&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="s"&gt;&amp;quot;=a&amp;quot;&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;result&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;:&lt;/span&gt;
       &lt;span class="s"&gt;&amp;quot;1&amp;quot;&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;newval&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;:&lt;/span&gt;
       &lt;span class="s"&gt;&amp;quot;cc&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
@@ -1622,7 +1622,7 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;/pre&gt;&lt;/div&gt;
 
 
-&lt;p&gt;-- EOF --&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">zorksylar</dc:creator><pubDate>Thu, 22 Aug 2013 00:00:00 +0800</pubDate><guid>tag:zorksylar.github.io,2013-08-22:6.828-lab4-a-writeup.html</guid><category>[6.828</category><category>OS]</category></item><item><title>6.828 Lab3 PartB 小结</title><link>http://zorksylar.github.io/6.828-lab3-b-writeup.html</link><description>&lt;h3&gt;Page Faults, Breakpoints Exceptions, and System Calls&lt;/h3&gt;
+&lt;p&gt;-- EOF --&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">pgplus1628</dc:creator><pubDate>Thu, 22 Aug 2013 00:00:00 +0800</pubDate><guid>tag:zorksylar.github.io,2013-08-22:6.828-lab4-a-writeup.html</guid><category>[6.828</category><category>OS]</category></item><item><title>6.828 Lab3 PartB 小结</title><link>http://zorksylar.github.io/6.828-lab3-b-writeup.html</link><description>&lt;h3&gt;Page Faults, Breakpoints Exceptions, and System Calls&lt;/h3&gt;
 &lt;h3&gt;Exercise 5,6,7&lt;/h3&gt;
 &lt;p&gt;在trap_dispath中添加代码，能够传到相应的处理函数执行。&lt;/p&gt;
 &lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt;
@@ -1838,7 +1838,7 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;/pre&gt;&lt;/div&gt;
 
 
-&lt;p&gt;-- EOF --&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">zorksylar</dc:creator><pubDate>Wed, 21 Aug 2013 00:00:00 +0800</pubDate><guid>tag:zorksylar.github.io,2013-08-21:6.828-lab3-b-writeup.html</guid><category>[6.828</category><category>OS]</category></item><item><title>6.828 Lab3 PartA 小结</title><link>http://zorksylar.github.io/6.828-lab3-a-writeup.html</link><description>&lt;h3&gt;User Environments and Exception Handling&lt;/h3&gt;
+&lt;p&gt;-- EOF --&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">pgplus1628</dc:creator><pubDate>Wed, 21 Aug 2013 00:00:00 +0800</pubDate><guid>tag:zorksylar.github.io,2013-08-21:6.828-lab3-b-writeup.html</guid><category>[6.828</category><category>OS]</category></item><item><title>6.828 Lab3 PartA 小结</title><link>http://zorksylar.github.io/6.828-lab3-a-writeup.html</link><description>&lt;h3&gt;User Environments and Exception Handling&lt;/h3&gt;
 &lt;h3&gt;Exercise 1&lt;/h3&gt;
 &lt;ol&gt;
 &lt;li&gt;在JOS里面， struct Env 相当于是 linux kernel 里面的 task_struct，用于表示一个task。&lt;/li&gt;
@@ -2176,7 +2176,7 @@ uvpd 的值就是:&lt;/p&gt;
 &lt;p&gt;不能知道是否含有 Error Code，不能够通过硬件屏蔽某个中断。&lt;/p&gt;
 &lt;h4&gt;4.3 Question 2&lt;/h4&gt;
 &lt;p&gt;softint 虽然 int $14，但是 14 这个中断的 DPL = 0， 所以 user 没有这个权限访问这个段，就产生了 13 中断。如果 kernel 允许user直接产生 pagefault，主要看kernel怎么处理 user 产生的 pagefault 了，如果监测到 user 在访问一个不能够访问的地址，产生PF，另外user是没有权限写 CR2 寄存器的，但是CR2寄存器里面可能有值，kernel如果处理不当，会导致user得到这个地址的访问权限。&lt;/p&gt;
-&lt;p&gt;-- EOF --&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">zorksylar</dc:creator><pubDate>Tue, 20 Aug 2013 00:00:00 +0800</pubDate><guid>tag:zorksylar.github.io,2013-08-20:6.828-lab3-a-writeup.html</guid><category>[6.828</category><category>OS]</category></item><item><title>6.828 Lab2 小结</title><link>http://zorksylar.github.io/6.828-lab2-writeup.html</link><description>&lt;h3&gt;Background&lt;/h3&gt;
+&lt;p&gt;-- EOF --&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">pgplus1628</dc:creator><pubDate>Tue, 20 Aug 2013 00:00:00 +0800</pubDate><guid>tag:zorksylar.github.io,2013-08-20:6.828-lab3-a-writeup.html</guid><category>[6.828</category><category>OS]</category></item><item><title>6.828 Lab2 小结</title><link>http://zorksylar.github.io/6.828-lab2-writeup.html</link><description>&lt;h3&gt;Background&lt;/h3&gt;
 &lt;p&gt;在lab1中，boot的时候，把jos的ELF文件load到了内存中，这个时候，还没有建立jos所需要运行的页表，同时此时已经进入了保护模式，jos最开始会运行kern/entry.S 中的代码。这个代码只做了一件事情，就是建立了一个临时的页表，把VA的[0,4MB]和[KERNBASE, KERNBASE+4MB]映射到PA的[0,4MB]。&lt;/p&gt;
 &lt;p&gt;因为jos的ELFload到内存中，因为jos的代码需要运行在VA的KERNBASE + 1MB，所以这样的映射是足够的.在kern/entry.S把临时的页表安装好之后，会跳转到kern/init.c的i386_init()函数继续执行。&lt;/p&gt;
 &lt;h3&gt;lab2要做的事情&lt;/h3&gt;
@@ -2409,4 +2409,4 @@ pa  0       640k      1024k
 &lt;/pre&gt;&lt;/div&gt;
 
 
-&lt;p&gt;--- EOF ---&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">zorksylar</dc:creator><pubDate>Mon, 12 Aug 2013 00:00:00 +0800</pubDate><guid>tag:zorksylar.github.io,2013-08-12:6.828-lab2-writeup.html</guid><category>[6.828</category><category>OS]</category></item></channel></rss>
+&lt;p&gt;--- EOF ---&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">pgplus1628</dc:creator><pubDate>Mon, 12 Aug 2013 00:00:00 +0800</pubDate><guid>tag:zorksylar.github.io,2013-08-12:6.828-lab2-writeup.html</guid><category>[6.828</category><category>OS]</category></item></channel></rss>

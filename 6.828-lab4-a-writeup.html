@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" prefix="og: http://ogp.me/ns# fb: https://www.facebook.com/2008/fbml">
 <head>
-    <title>6.828 Lab4 PartA 小结 - Z's Thoughts</title>
+    <title>6.828 Lab4 PartA 小结 - PG's Thoughts</title>
     <!-- Using the latest rendering mode for IE -->
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta charset="utf-8">
@@ -11,11 +11,11 @@
 
 <link rel="canonical" href="http://zorksylar.github.io/6.828-lab4-a-writeup.html">
 
-        <meta name="author" content="zorksylar" />
+        <meta name="author" content="pgplus1628" />
         <meta name="keywords" content="[6.828,OS]" />
         <meta name="description" content="Multiprocessor Support and Cooperative Multitasking" />
 
-        <meta property="og:site_name" content="Z's Thoughts" />
+        <meta property="og:site_name" content="PG's Thoughts" />
         <meta property="og:type" content="article"/>
         <meta property="og:title" content="6.828 Lab4 PartA 小结"/>
         <meta property="og:url" content="http://zorksylar.github.io/6.828-lab4-a-writeup.html"/>
@@ -24,7 +24,7 @@
             <meta property="article:section" content="Blog" />
             <meta property="article:tag" content="[6.828" />
             <meta property="article:tag" content="OS]" />
-            <meta property="article:author" content="zorksylar" />
+            <meta property="article:author" content="pgplus1628" />
 
 
 
@@ -36,12 +36,12 @@
     <link rel="stylesheet" href="http://zorksylar.github.io/theme/css/style.css" type="text/css"/>
 
         <link href="http://zorksylar.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate"
-              title="Z's Thoughts ATOM Feed"/>
+              title="PG's Thoughts ATOM Feed"/>
 
 
 
         <link href="http://zorksylar.github.io/feeds/blog.atom.xml" type="application/atom+xml" rel="alternate"
-              title="Z's Thoughts Blog ATOM Feed"/>
+              title="PG's Thoughts Blog ATOM Feed"/>
 
 </head>
 <body>
@@ -56,7 +56,7 @@
                 <span class="icon-bar"></span>
             </button>
             <a href="http://zorksylar.github.io/" class="navbar-brand">
-Z's Thoughts            </a>
+PG's Thoughts            </a>
         </div>
         <div class="collapse navbar-collapse navbar-ex1-collapse">
             <ul class="nav navbar-nav">
@@ -288,7 +288,7 @@ Z's Thoughts            </a>
   <span class="c1">// It also serializes, so that reads after acquire are not</span>
   <span class="c1">// reordered before it. </span>
   <span class="k">while</span> <span class="p">(</span><span class="n">xchg</span><span class="p">(</span><span class="o">&amp;</span><span class="n">lk</span><span class="o">-&gt;</span><span class="n">locked</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span>
-    <span class="n">asm</span> <span class="k">volatile</span> <span class="p">(</span><span class="s">&quot;pause&quot;</span><span class="p">);</span>
+    <span class="k">asm</span> <span class="k">volatile</span> <span class="p">(</span><span class="s">&quot;pause&quot;</span><span class="p">);</span>
 
   <span class="c1">// Record info about lock acquisition for debugging.</span>
 <span class="cp">#ifdef DEBUG_SPINLOCK</span>
@@ -303,7 +303,7 @@ Z's Thoughts            </a>
   <span class="kt">uint32_t</span> <span class="n">result</span><span class="p">;</span>
 
   <span class="c1">// The + in &quot;+m&quot; denotes a read-modify-write operand.</span>
-  <span class="n">asm</span> <span class="k">volatile</span><span class="p">(</span><span class="s">&quot;lock; xchgl %0, %1&quot;</span> <span class="o">:</span>
+  <span class="k">asm</span> <span class="k">volatile</span><span class="p">(</span><span class="s">&quot;lock; xchgl %0, %1&quot;</span> <span class="o">:</span>
       <span class="s">&quot;+m&quot;</span> <span class="p">(</span><span class="o">*</span><span class="n">addr</span><span class="p">),</span> <span class="s">&quot;=a&quot;</span> <span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="o">:</span>
       <span class="s">&quot;1&quot;</span> <span class="p">(</span><span class="n">newval</span><span class="p">)</span> <span class="o">:</span>
       <span class="s">&quot;cc&quot;</span><span class="p">);</span>
@@ -667,7 +667,7 @@ Z's Thoughts            </a>
       <div class="row">
          <!--
          -->
-         <div class="col-xs-10">&copy; 2016 zorksylar
+         <div class="col-xs-10">&copy; 2016 pgplus1628
             <!--
             &middot; Powered by <a href="https://github.com/DandyDev/pelican-bootstrap3" target="_blank">pelican-bootstrap3</a>,
             <a href="http://docs.getpelican.com/" target="_blank">Pelican</a>,
